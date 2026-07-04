@@ -1,0 +1,2699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NET-WATCH — Home Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+:root{--bg:#07080c;--s1:#0d0f16;--s2:#12151f;--s3:#181c28;--border:#1e2535;--cyan:#00d4ff;--green:#00e87a;--yellow:#ffc740;--orange:#ff8c00;--red:#ff4557;--purple:#a855f7;--blue:#3b82f6;--text:#dde4f0;--muted:#5a6580;--mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;--sidebar:220px}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;display:flex;flex-direction:column}
+/* TOPBAR */
+.topbar{height:52px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px 0 0;flex-shrink:0;z-index:10}
+.brand{width:var(--sidebar);flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 16px;border-right:1px solid var(--border);height:100%}
+.brand-icon{width:32px;height:32px;background:linear-gradient(135deg,rgba(0,212,255,.2),rgba(0,232,122,.1));border:1px solid rgba(0,212,255,.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.brand-name{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;letter-spacing:.08em}
+.brand-sub{font-size:9px;color:var(--muted);letter-spacing:.05em}
+.topbar-center{flex:1;padding:0 20px}
+.topbar-title{font-family:var(--mono);font-size:13px;font-weight:600;color:#fff;letter-spacing:.05em}
+.topbar-sub{font-size:10px;color:var(--muted)}
+.topbar-right{display:flex;align-items:center;gap:20px}
+.refresh-badge{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.refresh-icon{width:16px;height:16px;border:1.5px solid var(--muted);border-top-color:var(--cyan);border-radius:50%;animation:spin 2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.refresh-val{color:var(--cyan);font-weight:600}
+.bell-wrap{position:relative;cursor:pointer}
+.bell-icon{font-size:16px;color:var(--muted)}
+.bell-badge{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--red);color:#fff;font-family:var(--mono);font-size:8px;font-weight:700;display:none;align-items:center;justify-content:center}
+.gear-icon{font-size:16px;color:var(--muted);cursor:pointer}
+/* LAYOUT */
+.body-wrap{display:flex;flex:1;overflow:hidden}
+/* SIDEBAR */
+.sidebar{width:var(--sidebar);flex-shrink:0;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:12px 0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:500;border-left:2px solid transparent;transition:all .15s;user-select:none}
+.nav-item:hover{color:var(--text);background:var(--s2)}
+.nav-item.active{color:var(--cyan);background:rgba(0,212,255,.05);border-left-color:var(--cyan)}
+.nav-icon{font-size:14px;width:18px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:10px;display:none}
+.sidebar-bottom{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border)}
+.inet-label{font-size:9px;color:var(--muted);letter-spacing:.1em;margin-bottom:4px}
+.inet-status{display:flex;align-items:center;gap:6px}
+.inet-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pdot 2s ease-in-out infinite}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:.4}}
+.inet-text{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green)}
+.uptime-row{margin-top:8px;font-size:10px;color:var(--muted)}
+.uptime-val{font-family:var(--mono);color:var(--cyan)}
+/* MAIN */
+.main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+/* PAGE */
+.page{display:none;flex-direction:column;gap:14px}
+.page.active{display:flex}
+
+/* ════════════════════════════════════════════════════════════
+   NO-SCROLL FULL-VIEWPORT OVERVIEW LAYOUT
+   Every row on the Overview page gets a proportional flex share
+   of available vertical space so the whole dashboard fits in
+   one viewport on any device — Galaxy Tab, iPad, desktop, phone.
+   min-height:0 is required on every flex child; without it the
+   browser refuses to shrink items below their natural size even
+   when told to, causing overflow regardless of flex settings.
+   All other pages (Devices, Settings, etc.) are unaffected —
+   they keep their normal overflow-y:auto scroll behaviour.
+   ════════════════════════════════════════════════════════════ */
+
+/* Disable scroll on main only while Overview is the active page */
+.body-wrap:has(#page-overview.active) .main {
+  overflow-y: hidden;
+  padding: 10px;
+  gap: 8px;
+}
+
+/* Overview page itself fills all available height inside main */
+#page-overview {
+  height: 100%;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* Every direct row child gets min-height:0 so flexbox can shrink it */
+#page-overview > * {
+  min-height: 0;
+  flex-shrink: 1;
+}
+
+/* Stat cards — compact fixed height, never stretches */
+#page-overview .stat-row    { flex: 0 0 auto; gap: 8px; }
+#page-overview .stat-card   { padding: 8px 12px; gap: 10px; }
+#page-overview .stat-icon   { width: 30px; height: 30px; font-size: 13px; }
+#page-overview .stat-value  { font-size: 17px; }
+#page-overview .stat-label  { font-size: 8px; }
+#page-overview .stat-sub    { font-size: 9px; margin-top: 1px; }
+
+/* Charts row — largest share of remaining space */
+#page-overview .charts-row  { flex: 2 1 0; min-height: 0; gap: 8px; grid-template-columns: 1fr 190px 210px; }
+
+/* Bottom panels row — slightly less than charts */
+#page-overview .bottom-row  { flex: 1.5 1 0; min-height: 0; gap: 8px; grid-template-columns: 1fr 1fr; }
+
+/* Right column: Network Status on top, Security Alerts below */
+#page-overview .right-col { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+#page-overview .right-col-top    { flex: 3 1 0; min-height: 0; }
+#page-overview .right-col-bottom { flex: 2 1 0; min-height: 0; }
+#page-overview .right-col-bottom .security-body { flex: 1; min-height: 0; padding: 4px 8px; gap: 2px; }
+#page-overview .right-col-bottom .shield-icon { font-size: 26px; }
+#page-overview .right-col-bottom .shield-title { font-size: 11px; }
+#page-overview .right-col-bottom .shield-sub { font-size: 9px; }
+
+/* Panel body fills height; canvas inside fills the body */
+#page-overview .panel-body    { flex: 1; min-height: 0; padding: 6px 10px; overflow: hidden; display: flex; flex-direction: column; }
+#page-overview .panel-body canvas { flex: 1; min-height: 0; width: 100% !important; }
+
+/* Section label + Quick Controls — fixed compact height */
+#page-overview .section-label { flex: 0 0 auto; margin-bottom: 0; font-size: 8px; }
+#page-overview .controls-row  { flex: 0 0 auto; gap: 8px; }
+#page-overview .ctrl-btn      { padding: 8px 10px; gap: 8px; }
+#page-overview .ctrl-btn-icon { width: 28px; height: 28px; font-size: 13px; }
+#page-overview .ctrl-label    { font-size: 11px; }
+#page-overview .ctrl-sub      { font-size: 9px; margin-top: 0; }
+
+/* Panels inside the grid rows fill their cell's height */
+#page-overview .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#page-overview .panel-header  { padding: 7px 12px; flex-shrink: 0; }
+#page-overview .panel-title   { font-size: 9px; }
+#page-overview .panel-meta    { font-size: 9px; }
+
+/* Panel body grows to fill leftover space; canvas fills it */
+#page-overview canvas         { max-height: 100%; }
+
+/* Chart legend */
+#page-overview .chart-legend  { padding: 0 10px 4px; gap: 10px; flex-shrink: 0; }
+#page-overview .legend-item   { font-size: 9px; }
+
+/* Donut */
+#page-overview .donut-wrap    { width: 90px; height: 90px; margin: 4px auto 6px; flex-shrink: 0; }
+#page-overview .donut-val     { font-size: 11px; }
+#page-overview .donut-label   { font-size: 8px; }
+#page-overview .bw-list       { padding: 0 10px 6px; gap: 2px; flex-shrink: 0; }
+#page-overview .bw-row        { gap: 6px; }
+#page-overview .bw-name       { font-size: 10px; }
+#page-overview .bw-pct,
+#page-overview .bw-gb         { font-size: 9px; width: 30px; }
+
+/* Network status list */
+#page-overview .net-status-list { gap: 3px; padding: 0 10px 6px; overflow-y: auto; flex: 1; }
+#page-overview .ns-row          { padding: 4px 8px; }
+#page-overview .ns-name         { font-size: 10px; }
+#page-overview .ns-status       { font-size: 9px; }
+#page-overview .uptime-bar      { padding: 5px 10px 6px; flex-shrink: 0; }
+
+/* Device/profile lists inside panels scroll internally if needed */
+#page-overview .device-list,
+#page-overview .profile-list  { overflow-y: auto; flex: 1; }
+#page-overview .device-row,
+#page-overview .profile-row   { padding: 5px 10px; }
+#page-overview .device-name,
+#page-overview .profile-name  { font-size: 11px; }
+#page-overview .device-ip,
+#page-overview .profile-window{ font-size: 9px; }
+#page-overview .view-all      { padding: 5px 10px; font-size: 9px; flex-shrink: 0; }
+
+/* Security body */
+#page-overview .security-body { padding: 6px 10px; flex: 1; gap: 3px; overflow: hidden; }
+#page-overview .shield-icon   { font-size: 32px; }
+#page-overview .shield-title  { font-size: 12px; margin-bottom: 3px; }
+#page-overview .shield-sub    { font-size: 10px; }
+#page-overview .alert-count-badge { font-size: 9px; }
+
+/* Alert list inside security panel */
+#page-overview .alert-list    { padding: 0 10px 6px; gap: 4px; overflow-y: auto; }
+#page-overview .alert-item    { padding: 5px 8px; }
+#page-overview .alert-rule    { font-size: 10px; }
+#page-overview .alert-meta    { font-size: 9px; }
+
+/* Responsive: phones in portrait — stack charts/bottom to 1 col
+   and allow the overview to scroll since there's simply not enough height */
+@media (max-width: 600px) {
+  #page-overview .charts-row,
+  #page-overview .bottom-row  { grid-template-columns: 1fr; }
+  .body-wrap:has(#page-overview.active) .main { overflow-y: auto; }
+}
+
+/* Very short screens (phone landscape) — let overview scroll rather
+   than crushing text to illegibility */
+@media (max-height: 420px) {
+  .body-wrap:has(#page-overview.active) .main { overflow-y: auto; }
+}
+/* Large/hi-res screens — restore comfortable sizing for stat cards and controls */
+@media (min-height: 900px) {
+  #page-overview .stat-card  { padding: 12px 16px; }
+  #page-overview .stat-value { font-size: 22px; }
+  #page-overview .stat-label { font-size: 9px; }
+  #page-overview .stat-sub   { font-size: 10px; }
+  #page-overview .ctrl-btn   { padding: 12px 12px; }
+  #page-overview .ctrl-label { font-size: 12px; }
+  #page-overview .ctrl-sub   { font-size: 10px; }
+}
+display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.page-hdr-left h2{font-family:var(--mono);font-size:18px;font-weight:700;color:#fff}
+.page-hdr-left p{font-size:11px;color:var(--muted);margin-top:2px}
+.page-hdr-right{display:flex;gap:8px}
+.btn{font-family:var(--mono);font-size:11px;padding:7px 14px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--s2);color:var(--text);transition:all .15s}
+.btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn.primary{background:rgba(0,212,255,.12);border-color:rgba(0,212,255,.4);color:var(--cyan)}
+.btn.danger{background:rgba(255,69,87,.12);border-color:rgba(255,69,87,.4);color:var(--red)}
+/* PANEL */
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.panel-title{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;color:var(--text);text-transform:uppercase}
+.panel-meta{font-size:10px;color:var(--muted)}
+.panel-body{padding:14px 16px}
+/* STAT CARDS */
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.stat-card{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:12px;transition:border-color .2s}
+.stat-card:hover{border-color:rgba(0,212,255,.25)}
+.stat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.stat-body{min-width:0}
+.stat-label{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:2px}
+.stat-value{font-family:var(--mono);font-size:22px;font-weight:700;color:#fff;line-height:1}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.stat-sub.green{color:var(--green)}
+.stat-sub.yellow{color:var(--yellow)}
+.stat-sub.red{color:var(--red)}
+/* CHARTS ROW */
+.charts-row{display:grid;grid-template-columns:1fr 260px 260px;gap:12px}
+.chart-legend{display:flex;gap:16px;padding:0 16px 10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:2px}
+/* BOTTOM ROW */
+.bottom-row{display:grid;grid-template-columns:1fr 1fr 280px;gap:12px}
+/* DEVICE LIST */
+.device-list{display:flex;flex-direction:column}
+.device-row{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.device-row:last-child{border-bottom:none}
+.device-row:hover{background:var(--s2)}
+.device-icon{font-size:14px;color:var(--muted);width:20px;text-align:center}
+.device-info{flex:1;min-width:0}
+.device-name{font-size:12px;font-weight:500;color:var(--text)}
+.device-ip{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.device-status{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:4px}
+.device-status.online{color:var(--green);background:rgba(0,232,122,.1)}
+.device-status.offline{color:var(--red);background:rgba(255,69,87,.1)}
+.device-status.unknown{color:var(--yellow);background:rgba(255,199,64,.1)}
+/* PROFILE LIST */
+.profile-list{display:flex;flex-direction:column}
+.profile-row{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.profile-row:last-child{border-bottom:none}
+.profile-row:hover{background:var(--s2)}
+.profile-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.profile-info{flex:1;min-width:0}
+.profile-name{font-size:12px;font-weight:500;color:var(--text)}
+.profile-window{font-size:10px;color:var(--muted)}
+.profile-rule{font-size:10px;color:var(--muted);text-align:right}
+.profile-badge{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.profile-badge.allowed{color:var(--green);background:rgba(0,232,122,.1)}
+.profile-badge.blocked{color:var(--red);background:rgba(255,69,87,.1)}
+/* NET STATUS */
+.net-status-list{display:flex;flex-direction:column;gap:6px;padding:0 16px 14px}
+.ns-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--s2);border-radius:6px;border:1px solid var(--border)}
+.ns-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ns-dot.up{background:var(--green);box-shadow:0 0 5px var(--green)}
+.ns-dot.down{background:var(--red);box-shadow:0 0 5px var(--red)}
+.ns-name{flex:1;font-size:11px;color:var(--text)}
+.ns-status.up{color:var(--green);font-family:var(--mono);font-size:10px}
+.ns-status.down{color:var(--red);font-family:var(--mono);font-size:10px}
+.uptime-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 14px;border-top:1px solid var(--border)}
+.uptime-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.uptime-time{font-family:var(--mono);font-size:12px;color:var(--cyan)}
+/* DONUT */
+.donut-wrap{position:relative;width:130px;height:130px;margin:8px auto 12px}
+.donut-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+.donut-val{font-family:var(--mono);font-size:15px;font-weight:700;color:#fff;line-height:1}
+.donut-label{font-size:9px;color:var(--muted);margin-top:2px}
+.bw-list{display:flex;flex-direction:column;gap:5px;padding:0 16px 14px}
+.bw-row{display:flex;align-items:center;gap:8px}
+.bw-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.bw-name{flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bw-pct{font-family:var(--mono);font-size:10px;color:var(--muted);width:36px;text-align:right}
+.bw-gb{font-family:var(--mono);font-size:10px;color:var(--muted);width:44px;text-align:right}
+/* SECURITY */
+.security-body{padding:16px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.shield-icon{font-size:52px;animation:sglow 3s ease-in-out infinite}
+@keyframes sglow{0%,100%{filter:drop-shadow(0 0 12px rgba(0,232,122,.4))}50%{filter:drop-shadow(0 0 24px rgba(0,232,122,.7))}}
+.shield-title{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green);margin-bottom:6px}
+.shield-sub{font-size:11px;color:var(--muted);line-height:1.5}
+.alert-count-badge{font-family:var(--mono);font-size:10px;color:var(--green);background:rgba(0,232,122,.1);padding:2px 8px;border-radius:4px}
+.alert-list{display:flex;flex-direction:column;gap:6px;padding:0 16px 14px;width:100%}
+.alert-item{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:left}
+.alert-rule{font-size:11px;color:var(--text);margin-bottom:3px}
+.alert-meta{font-size:10px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.alert-level{font-family:var(--mono);font-size:9px;padding:1px 6px;border-radius:3px}
+.lvl-critical{background:rgba(255,69,87,.2);color:var(--red)}
+.lvl-high{background:rgba(255,69,87,.15);color:var(--red)}
+.lvl-medium{background:rgba(255,199,64,.15);color:var(--yellow)}
+.lvl-low{background:rgba(0,212,255,.1);color:var(--cyan)}
+.lvl-info{background:rgba(90,101,128,.2);color:var(--muted)}
+/* CONTROLS */
+.controls-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.ctrl-btn{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px 12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .2s;text-align:left;width:100%}
+.ctrl-btn:hover{transform:translateY(-1px)}
+.ctrl-btn-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ctrl-label{font-size:12px;font-weight:600;color:var(--text);line-height:1.3}
+.ctrl-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.section-label{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:-4px}
+/* VIEW ALL */
+.view-all{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;font-size:11px;color:var(--cyan);cursor:pointer;border-top:1px solid var(--border)}
+.view-all:hover{background:var(--s2)}
+/* FULL DEVICE TABLE */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 16px;border-bottom:1px solid var(--border)}
+.data-table td{padding:11px 16px;border-bottom:1px solid rgba(30,37,53,.6);font-size:12px;color:var(--text);vertical-align:middle}
+.data-table tr:hover td{background:var(--s2)}
+.data-table tr:last-child td{border-bottom:none}
+td.mono{font-family:var(--mono);font-size:11px;color:var(--muted)}
+/* GRID 2COL / 3COL */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+/* PROGRESS BAR */
+.progress-bar{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:2px;transition:width .6s ease}
+/* SPARKLINE ROW */
+.spark-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.spark-row:last-child{border-bottom:none}
+.spark-info{flex:1;min-width:0}
+.spark-name{font-size:12px;color:var(--text);font-weight:500}
+.spark-val{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.spark-canvas{width:80px;height:28px}
+/* MITRE TAG */
+.mitre-tag{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(168,85,247,.15);color:var(--purple)}
+/* TIMELINE */
+.timeline{display:flex;flex-direction:column;gap:0}
+.tl-item{display:flex;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);position:relative}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.tl-body{flex:1;min-width:0}
+.tl-title{font-size:12px;font-weight:500;color:var(--text)}
+.tl-meta{font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:10px;flex-wrap:wrap}
+/* TOGGLE */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-info .toggle-name{font-size:13px;font-weight:500;color:var(--text)}
+.toggle-info .toggle-desc{font-size:11px;color:var(--muted);margin-top:2px}
+.toggle-switch{width:36px;height:20px;border-radius:10px;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s}
+.toggle-switch.on{background:var(--cyan)}
+.toggle-switch.off{background:var(--s3)}
+.toggle-knob{position:absolute;top:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s}
+.toggle-switch.on .toggle-knob{left:19px}
+.toggle-switch.off .toggle-knob{left:3px}
+/* MAP PLACEHOLDER */
+.map-area{background:var(--s2);border-radius:8px;height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border);position:relative;overflow:hidden}
+.map-node{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.map-node-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid;transition:transform .2s}
+.map-node-icon:hover{transform:scale(1.15)}
+.map-node-label{font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap}
+.map-line{position:absolute;background:rgba(30,37,53,.8);transform-origin:left center}
+.map-pulse{position:absolute;border-radius:50%;animation:mpulse 2s ease-in-out infinite}
+@keyframes mpulse{0%{transform:scale(1);opacity:.7}50%{transform:scale(1.5);opacity:.2}100%{transform:scale(1);opacity:.7}}
+/* REPORT CARDS */
+.report-stat{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+.report-stat-val{font-family:var(--mono);font-size:28px;font-weight:700;color:#fff;margin-bottom:4px}
+.report-stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+/* INPUT */
+.field-row{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-family:var(--mono)}
+.field-input{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .15s}
+.field-input:focus{border-color:var(--cyan)}
+.field-select{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;width:100%}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.open{display:flex}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:24px;width:420px;max-width:90vw;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.modal-title{font-family:var(--mono);font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.modal-close{cursor:pointer;color:var(--muted);font-size:18px}
+.modal-close:hover{color:var(--text)}
+/* TOAST */
+.toast-container{position:fixed;top:60px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:999;pointer-events:none;max-width:360px}
+.toast{background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);animation:tin .25s ease;pointer-events:auto}
+@keyframes tin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+canvas{display:block}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">🛡️</div>
+    <div>
+      <div class="brand-name">NET-WATCH</div>
+      <div class="brand-sub">Network Visibility</div>
+    </div>
+  </div>
+  <div class="topbar-center">
+    <div class="topbar-title" id="page-title">NETOPS HOME LAB — Overview</div>
+    <div class="topbar-sub">Network Visibility Platform</div>
+  </div>
+  <div class="topbar-right">
+    <div class="refresh-badge">
+      <div class="refresh-icon"></div>
+      Auto Refresh <span class="refresh-val" id="countdown">10s</span>
+    </div>
+    <div class="bell-wrap" onclick="triggerAlert()">
+      <div class="bell-icon">🔔</div>
+      <div class="bell-badge" id="bell-count">0</div>
+    </div>
+    <div class="gear-icon" onclick="navTo('settings')">⚙️</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════ LOGIN SCREEN ═══════════════════ -->
+<div id="login-screen" style="display:none">
+  <div style="
+      background:var(--s1);border:1px solid var(--border);border-radius:12px;
+      padding:40px 48px;max-width:380px;width:90%;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🛡️</div>
+    <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:#fff;margin-bottom:4px">NET-WATCH</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:.06em">Network Visibility Platform</div>
+    <div id="login-error" style="display:none;font-size:11px;color:var(--red);margin-bottom:14px;padding:8px;background:rgba(255,69,87,.1);border-radius:6px">Incorrect password</div>
+    <input id="login-pw" type="password" placeholder="Enter dashboard password"
+      style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:7px;
+             padding:11px 14px;font-family:var(--mono);font-size:13px;color:#fff;
+             outline:none;margin-bottom:12px;box-sizing:border-box"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()" style="
+        width:100%;background:linear-gradient(135deg,#00d4ff22,#00e87a22);
+        border:1px solid #00d4ff55;color:var(--cyan);border-radius:7px;
+        padding:11px;font-family:var(--mono);font-size:13px;cursor:pointer;
+        transition:all .15s"
+      onmouseover="this.style.background='rgba(0,212,255,.18)'"
+      onmouseout="this.style.background='linear-gradient(135deg,#00d4ff22,#00e87a22)'">
+      Unlock Dashboard
+    </button>
+    <div style="font-size:10px;color:var(--muted);margin-top:20px">
+      Set <code style="color:var(--cyan)">NETWATCH_PASSWORD</code> env var on your server
+    </div>
+  </div>
+</div>
+
+<div class="body-wrap" id="dashboard">
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="nav-item active" data-page="overview"><span class="nav-icon">🏠</span> Overview</div>
+  <div class="nav-item" data-page="devices"><span class="nav-icon">💻</span> Devices</div>
+  <div class="nav-item" data-page="users"><span class="nav-icon">👤</span> Users / Profiles</div>
+  <div class="nav-item" data-page="access"><span class="nav-icon">🔐</span> Access Control</div>
+  <div class="nav-item" data-page="map"><span class="nav-icon">🗺️</span> Network Map</div>
+  <div class="nav-item" data-page="security"><span class="nav-icon">🛡️</span> Security</div>
+  <div class="nav-item" data-page="alerts"><span class="nav-icon">🔔</span> Alerts <span class="nav-badge" id="nav-badge">0</span></div>
+  <div class="nav-item" data-page="reports"><span class="nav-icon">📊</span> Reports</div>
+  <div class="nav-item" data-page="settings"><span class="nav-icon">⚙️</span> Settings</div>
+  <div class="sidebar-bottom">
+    <div class="inet-label">INTERNET STATUS</div>
+    <div class="inet-status"><div class="inet-dot"></div><div class="inet-text">GOOD</div></div>
+    <div class="uptime-row">Uptime <span class="uptime-val" id="sidebar-uptime">—</span></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- ═══════════════════════ PAGE: OVERVIEW ═══════════════════════ -->
+<div class="page active" id="page-overview">
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2)">🖥️</div>
+      <div class="stat-body"><div class="stat-label">Devices Online</div><div class="stat-value" id="stat-online">0</div><div class="stat-sub" id="stat-total">of 0 total</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2)">👥</div>
+      <div class="stat-body"><div class="stat-label">Active Users</div><div class="stat-value" id="stat-users">0</div><div class="stat-sub" id="stat-users-sub">of 0 profiles</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.2)">📈</div>
+      <div class="stat-body"><div class="stat-label">Total Bandwidth</div><div class="stat-value" id="stat-bw">—</div><div class="stat-sub">Today</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.2)">🛡️</div>
+      <div class="stat-body"><div class="stat-label">Security Alerts</div><div class="stat-value" id="stat-alerts">0</div><div class="stat-sub green" id="stat-alert-sub">All Clear</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(255,199,64,.1);border:1px solid rgba(255,199,64,.2)">🆕</div>
+      <div class="stat-body"><div class="stat-label">New Devices</div><div class="stat-value" style="color:var(--yellow)" id="stat-new-devices">0</div><div class="stat-sub yellow">Last 24 Hours</div></div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Network Traffic</span><span class="panel-meta">Last 24 Hours ›</span></div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Download</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div> Upload</div>
+      </div>
+      <div class="panel-body" style="padding-top:0"><canvas id="traffic-chart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Top Bandwidth</span><span class="panel-meta">›</span></div>
+      <div class="donut-wrap"><canvas id="donut-chart"></canvas>
+        <div class="donut-center"><div class="donut-val" id="donut-tb-val">—</div><div class="donut-label">Total</div></div>
+      </div>
+      <div class="bw-list" id="bw-list"></div>
+    </div>
+    <div class="right-col">
+      <div class="panel right-col-top">
+        <div class="panel-header"><span class="panel-title">Network Status</span></div>
+        <div class="net-status-list" id="net-status"></div>
+        <div class="uptime-bar"><span class="uptime-label">Uptime</span><span class="uptime-time" id="uptime-display">—</span></div>
+      </div>
+      <div class="panel right-col-bottom">
+        <div class="panel-header"><span class="panel-title">Security Alerts</span><span class="alert-count-badge" id="alert-count-badge">0 Active</span></div>
+        <div class="security-body" id="security-body"></div>
+        <div class="view-all" onclick="navTo('alerts')">View Alert History <span>›</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Device Status</span>
+        <span class="panel-meta"><span id="dev-status-count" style="color:var(--muted)">Waiting for scan...</span></span>
+      </div>
+      <div class="device-list" id="device-list-ov"></div>
+      <div class="view-all" onclick="navTo('devices')">View All Devices <span>›</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">User / Profile Status</span><span class="panel-meta">›</span></div>
+      <div class="profile-list" id="profile-list-ov"></div>
+      <div class="view-all" onclick="navTo('users')">View All Profiles <span>›</span></div>
+    </div>
+  </div>
+
+  <div class="section-label">Quick Controls</div>
+  <div class="controls-row" id="controls-row"></div>
+</div>
+
+<!-- ═══════════════════════ PAGE: DEVICES ═══════════════════════ -->
+<div class="page" id="page-devices">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Devices</h2><p id="devices-page-hdr">0 registered devices</p></div>
+    <div class="page-hdr-right">
+      <button class="btn" onclick="runNetworkScan()">🔍 Scan Network</button>
+      <button class="btn" onclick="triggerAutoRename()" title="Auto-identify unknown devices using MAC vendor lookup and nmap hostname detection">🏷 Auto-Name Unknowns</button>
+      <button class="btn primary" onclick="populateProfileDropdown();openModal('add-device-modal')">+ Add Device</button>
+    </div>
+  </div>
+  <div class="grid-4">
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.2)">✅</div><div class="stat-body"><div class="stat-label">Online</div><div class="stat-value" style="color:var(--green)" id="devices-online-count">0</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(255,69,87,.1);border:1px solid rgba(255,69,87,.2)">❌</div><div class="stat-body"><div class="stat-label">Offline</div><div class="stat-value" style="color:var(--red)">3</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(255,199,64,.1);border:1px solid rgba(255,199,64,.2)">❓</div><div class="stat-body"><div class="stat-label">Unknown</div><div class="stat-value" style="color:var(--yellow)">1</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2)">🆕</div><div class="stat-body"><div class="stat-label">New (24h)</div><div class="stat-value" style="color:var(--cyan)">1</div></div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">All Devices</span><span class="panel-meta">Last scan: 2 min ago</span></div>
+    <table class="data-table" id="devices-table">
+      <thead><tr><th>Device</th><th>IP Address</th><th>MAC Address</th><th>Type</th><th>Profile</th><th>Last Seen</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="devices-tbody"></tbody>
+    </table>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Bandwidth by Device</span><span class="panel-meta">Today</span></div>
+      <div style="padding:14px 16px"><canvas id="devices-bar-chart" height="180"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Device Types</span></div>
+      <div style="padding:14px;display:flex;align-items:center;gap:20px">
+        <div style="position:relative;width:140px;height:140px;flex-shrink:0">
+          <canvas id="device-type-chart"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+            <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:#fff">27</div>
+            <div style="font-size:9px;color:var(--muted)">Total</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;flex:1" id="device-type-legend"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: USERS ═══════════════════════ -->
+<div class="page" id="page-users">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Users / Profiles</h2><p>Manage access schedules and internet profiles</p></div>
+    <div class="page-hdr-right">
+      <button class="btn primary" onclick="openModal('add-profile-modal')">+ New Profile</button>
+    </div>
+  </div>
+  <div class="grid-3" id="profile-cards"></div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Schedule Overview</span><span class="panel-meta">Today's access windows</span></div>
+    <div style="padding:14px 16px"><canvas id="schedule-chart" height="90"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Access Log</span><span class="panel-meta">Last 20 events</span></div>
+    <div class="timeline" id="access-log"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: ACCESS CONTROL ═══════════════════════ -->
+<div class="page" id="page-access">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Access Control</h2><p>Firewall rules, blocklists, and Pi-hole group management</p></div>
+    <div class="page-hdr-right">
+      <button class="btn primary" onclick="openModal('add-rule-modal')">+ Add Rule</button>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Firewall Rules</span><span class="panel-meta" style="color:var(--green)">5 Active</span></div>
+      <table class="data-table">
+        <thead><tr><th>Rule</th><th>Direction</th><th>Protocol</th><th>Status</th></tr></thead>
+        <tbody id="fw-rules-tbody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Pi-hole Blocklists</span><span class="panel-meta">›</span></div>
+      <table class="data-table">
+        <thead><tr><th>List</th><th>Domains</th><th>Active</th></tr></thead>
+        <tbody id="blocklist-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">DNS Query Stats — Last 24h</span></div>
+    <div style="padding:14px 16px"><canvas id="dns-chart" height="100"></canvas></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Top Blocked Domains</span></div>
+      <table class="data-table">
+        <thead><tr><th>Domain</th><th>Category</th><th>Blocks</th></tr></thead>
+        <tbody id="blocked-domains-tbody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">VLAN Segments</span></div>
+      <table class="data-table">
+        <thead><tr><th>VLAN</th><th>Name</th><th>Subnet</th><th>Devices</th></tr></thead>
+        <tbody id="vlan-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: NETWORK MAP ═══════════════════════ -->
+<div class="page" id="page-map">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Network Map</h2><p>Live topology of your homelab LAN</p></div>
+    <div class="page-hdr-right">
+      <button class="btn" onclick="showToast('Rediscovering topology…','var(--cyan)')">↺ Refresh Topology</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Live Topology</span><span class="panel-meta">192.168.x.0/24</span></div>
+    <div class="map-area" id="map-area"></div>
+  </div>
+  <div class="grid-3">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Active Connections</span></div>
+      <table class="data-table">
+        <thead><tr><th>Source</th><th>Destination</th><th>Protocol</th><th>Mbps</th></tr></thead>
+        <tbody id="conns-tbody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Port Utilisation</span></div>
+      <div style="padding:14px 16px"><canvas id="port-chart" height="160"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Protocol Breakdown</span></div>
+      <div style="padding:14px;display:flex;align-items:center;gap:16px">
+        <div style="position:relative;width:120px;height:120px;flex-shrink:0">
+          <canvas id="proto-chart"></canvas>
+        </div>
+        <div style="flex:1" id="proto-legend"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: SECURITY ═══════════════════════ -->
+<div class="page" id="page-security">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Security</h2><p>Wazuh SIEM · IDS/IPS · Threat Intelligence</p></div>
+    <div class="page-hdr-right">
+      <button class="btn danger" onclick="triggerAlert();navTo('alerts')">⚠️ Simulate Alert</button>
+    </div>
+  </div>
+  <div class="grid-4">
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,232,122,.1);border:1px solid rgba(0,232,122,.2)">🛡️</div><div class="stat-body"><div class="stat-label">Threat Level</div><div class="stat-value" id="sec-threat-val" style="color:var(--green)">LOW</div><div class="stat-sub green" id="sec-threat-sub">No active threats</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2)">🔍</div><div class="stat-body"><div class="stat-label">Events (24h)</div><div class="stat-value">1,284</div><div class="stat-sub">+12% vs yesterday</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(255,199,64,.1);border:1px solid rgba(255,199,64,.2)">🚫</div><div class="stat-body"><div class="stat-label">Blocked IPs</div><div class="stat-value" style="color:var(--yellow)">47</div><div class="stat-sub">Via firewall rules</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2)">📋</div><div class="stat-body"><div class="stat-label">MITRE Tactics</div><div class="stat-value" style="color:var(--purple)">3</div><div class="stat-sub">Detected today</div></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Alert Volume — 7 Days</span></div>
+      <div style="padding:14px 16px"><canvas id="alert-vol-chart" height="120"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">MITRE ATT&CK Coverage</span></div>
+      <div style="padding:14px 16px" id="mitre-grid"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Recent Wazuh Events</span><span class="panel-meta">Last 10 · Level ≥ 5</span></div>
+    <table class="data-table">
+      <thead><tr><th>Time</th><th>Rule</th><th>Level</th><th>Agent</th><th>MITRE</th></tr></thead>
+      <tbody id="wazuh-events-tbody"></tbody>
+    </table>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Top Alerting Agents</span></div>
+      <div style="padding:14px 16px"><canvas id="agents-chart" height="140"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Vulnerability Summary</span></div>
+      <table class="data-table">
+        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Score</th></tr></thead>
+        <tbody id="vuln-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: ALERTS ═══════════════════════ -->
+<div class="page" id="page-alerts">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Alerts</h2><p id="alert-page-sub">0 active alerts · All systems nominal</p></div>
+    <div class="page-hdr-right">
+      <button class="btn" onclick="alertsActive=false;renderAlerts();showToast('All alerts acknowledged','var(--green)')">✓ Acknowledge All</button>
+      <button class="btn danger" onclick="triggerAlert()">⚠️ Simulate Alert</button>
+    </div>
+  </div>
+  <div class="grid-4">
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(255,69,87,.1);border:1px solid rgba(255,69,87,.2)">🔴</div><div class="stat-body"><div class="stat-label">Critical</div><div class="stat-value" id="al-critical" style="color:var(--red)">0</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(255,199,64,.1);border:1px solid rgba(255,199,64,.2)">🟡</div><div class="stat-body"><div class="stat-label">High</div><div class="stat-value" id="al-high" style="color:var(--yellow)">0</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2)">🔵</div><div class="stat-body"><div class="stat-label">Medium</div><div class="stat-value" id="al-medium" style="color:var(--cyan)">2</div></div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(90,101,128,.15);border:1px solid rgba(90,101,128,.2)">⚪</div><div class="stat-body"><div class="stat-label">Low / Info</div><div class="stat-value" style="color:var(--muted)">18</div></div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Active Alerts</span><span class="alert-count-badge" id="active-alerts-badge">0 Active</span></div>
+    <div id="alerts-active-body">
+      <div style="padding:32px;text-align:center">
+        <div style="font-size:40px;margin-bottom:10px">🛡️</div>
+        <div style="font-family:var(--mono);color:var(--green);font-size:14px;margin-bottom:6px">All Clear</div>
+        <div style="color:var(--muted);font-size:12px">No active alerts. Click "Simulate Alert" to test the system.</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Alert History — Last 24h</span></div>
+    <div class="timeline" id="alert-history"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: REPORTS ═══════════════════════ -->
+<div class="page" id="page-reports">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Reports</h2><p>Weekly summaries · bandwidth · security posture</p></div>
+    <div class="page-hdr-right">
+      <button class="btn primary" onclick="showToast('Generating PDF report…','var(--cyan)')">⬇ Export PDF</button>
+    </div>
+  </div>
+  <div class="grid-4">
+    <div class="report-stat"><div class="report-stat-val" id="report-bw-val">—</div><div class="report-stat-label">Bandwidth Today</div></div>
+    <div class="report-stat"><div class="report-stat-val">98.7%</div><div class="report-stat-label">Network Uptime</div></div>
+    <div class="report-stat"><div class="report-stat-val">47,221</div><div class="report-stat-label">DNS Queries Today</div></div>
+    <div class="report-stat"><div class="report-stat-val">12.4%</div><div class="report-stat-label">Queries Blocked</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Weekly Bandwidth</span></div>
+      <div style="padding:14px 16px"><canvas id="weekly-bw-chart" height="140"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Daily Alert Counts — 30 Days</span></div>
+      <div style="padding:14px 16px"><canvas id="monthly-alerts-chart" height="140"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">Top Talkers — This Week</span></div>
+    <table class="data-table">
+      <thead><tr><th>Device</th><th>Download</th><th>Upload</th><th>Total</th><th>% Share</th><th>Trend</th></tr></thead>
+      <tbody id="top-talkers-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE: SETTINGS ═══════════════════════ -->
+<div class="page" id="page-settings">
+  <div class="page-hdr">
+    <div class="page-hdr-left"><h2>Settings</h2><p>Configure NET-WATCH integrations and preferences</p></div>
+    <div class="page-hdr-right">
+      <button class="btn primary" onclick="showToast('Settings saved','var(--green)')">💾 Save Changes</button>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Integrations</span></div>
+      <div style="padding:14px 20px" id="integrations-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Notifications</span></div>
+      <div style="padding:14px 20px" id="notifications-list"></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Network Configuration</span></div>
+      <div style="padding:16px 20px">
+        <div class="field-row"><div class="field-label">LAN Subnet</div><input class="field-input" value="192.168.x.0/24" style="width:100%"></div>
+        <div class="field-row"><div class="field-label">Gateway</div><input class="field-input" value="192.168.1.1" style="width:100%"></div>
+        <div class="field-row"><div class="field-label">DNS Server (Pi-hole)</div><input class="field-input" value="192.168.1.1" style="width:100%"></div>
+        <div class="field-row"><div class="field-label">Scan Interval</div>
+          <select class="field-select"><option>Every 30 seconds</option><option selected>Every 60 seconds</option><option>Every 5 minutes</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Wazuh Config</span></div>
+      <div style="padding:16px 20px">
+        <div class="field-row"><div class="field-label">Wazuh Manager URL</div><input class="field-input" value="https://localhost:55000" style="width:100%"></div>
+        <div class="field-row"><div class="field-label">API User</div><input class="field-input" value="wazuh" style="width:100%"></div>
+        <div class="field-row"><div class="field-label">Alert Threshold Level</div>
+          <select class="field-select"><option>Level 5+</option><option>Level 7+</option><option selected>Level 10+</option><option>Level 12+</option></select>
+        </div>
+        <div class="field-row"><div class="field-label">Poll Interval</div>
+          <select class="field-select"><option selected>Every 10 seconds</option><option>Every 30 seconds</option><option>Every minute</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div><!-- /body-wrap -->
+
+<!-- MODALS -->
+<div class="modal-overlay" id="add-device-modal">
+  <div class="modal">
+    <div class="modal-title">Add Device <span class="modal-close" onclick="closeModal('add-device-modal')">✕</span></div>
+    <div class="field-row"><div class="field-label">Device Name</div><input class="field-input" id="new-device-name" placeholder="e.g. Raspberry Pi" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">IP Address</div><input class="field-input" id="new-device-ip" placeholder="192.168.1.x" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">Type</div><select class="field-select" id="new-device-type"><option>Desktop</option><option>Server</option><option>Mobile</option><option>IoT</option><option>Game Console</option><option>TV</option></select></div>
+    <div class="field-row"><div class="field-label">Assign to Profile (optional)</div><select class="field-select" id="new-device-profile"></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('add-device-modal')">Cancel</button>
+      <button class="btn primary" onclick="submitNewDevice()">Add Device</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="add-profile-modal">
+  <div class="modal">
+    <div class="modal-title">New Profile <span class="modal-close" onclick="closeModal('add-profile-modal')">✕</span></div>
+    <div class="field-row"><div class="field-label">Profile Name</div><input class="field-input" id="new-profile-name" placeholder="e.g. Work Laptop" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">Access Window Start</div><input class="field-input" id="new-profile-start" type="time" value="08:00" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">Access Window End</div><input class="field-input" id="new-profile-end" type="time" value="22:00" style="width:100%"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('add-profile-modal')">Cancel</button>
+      <button class="btn primary" onclick="submitNewProfile()">Create</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="add-rule-modal">
+  <div class="modal">
+    <div class="modal-title">Add Firewall Rule <span class="modal-close" onclick="closeModal('add-rule-modal')">✕</span></div>
+    <div class="field-row"><div class="field-label">Rule Name</div><input class="field-input" placeholder="e.g. Block Telnet" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">Direction</div><select class="field-select"><option>Inbound</option><option>Outbound</option><option>Both</option></select></div>
+    <div class="field-row"><div class="field-label">Protocol / Port</div><input class="field-input" placeholder="TCP/23" style="width:100%"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('add-rule-modal')">Cancel</button>
+      <button class="btn primary" onclick="closeModal('add-rule-modal');showToast('Rule added','var(--green)')">Add Rule</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="schedule-editor-modal">
+  <div class="modal" style="width:520px">
+    <div class="modal-title">
+      <span id="schedule-editor-title">Edit Schedule</span>
+      <span class="modal-close" onclick="closeModal('schedule-editor-modal')">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">
+      Set a start/end time for each day, plus an optional daily time limit in minutes.
+      Leave the limit blank for no cap — access is then only restricted by the window itself.
+      Set start and end to the same time to block that day completely.
+    </div>
+    <div id="schedule-editor-rows" style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('schedule-editor-modal')">Cancel</button>
+      <button class="btn primary" onclick="saveScheduleEditor()">Save Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Device Modal ── -->
+<div class="modal-overlay" id="edit-device-modal">
+  <div class="modal" style="width:460px">
+    <div class="modal-title">Edit Device <span class="modal-close" onclick="closeModal('edit-device-modal')">✕</span></div>
+    <input type="hidden" id="edit-device-id">
+    <div class="field-row"><div class="field-label">Device Name</div><input class="field-input" id="edit-device-name" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">IP Address</div><input class="field-input" id="edit-device-ip" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">Type</div>
+      <select class="field-select" id="edit-device-type">
+        <option>Desktop</option><option>Server</option><option>Mobile</option>
+        <option>IoT</option><option>Game Console</option><option>TV</option>
+        <option>Laptop</option><option>Tablet</option><option>Unknown</option>
+      </select>
+    </div>
+    <div class="field-row"><div class="field-label">Icon (any emoji)</div><input class="field-input" id="edit-device-icon" style="width:100%" placeholder="💻"></div>
+    <div class="field-row"><div class="field-label">Assign to Profile</div><select class="field-select" id="edit-device-profile"></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn danger" onclick="deleteDeviceConfirm()">🗑 Delete</button>
+      <button class="btn" onclick="closeModal('edit-device-modal')">Cancel</button>
+      <button class="btn primary" onclick="saveDeviceEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Profile Modal ── -->
+<div class="modal-overlay" id="edit-profile-modal">
+  <div class="modal" style="width:480px;max-height:88vh;overflow-y:auto">
+    <div class="modal-title">Edit Profile <span class="modal-close" onclick="closeModal('edit-profile-modal')">✕</span></div>
+    <input type="hidden" id="edit-profile-id">
+    <div class="field-row"><div class="field-label">Profile Name</div><input class="field-input" id="edit-profile-name" style="width:100%"></div>
+    <div class="field-row"><div class="field-label">Icon (any emoji)</div><input class="field-input" id="edit-profile-icon" style="width:100%" placeholder="👤"></div>
+    <div class="field-row"><div class="field-label">Color (hex, e.g. #00d4ff)</div><input class="field-input" id="edit-profile-color" style="width:100%" placeholder="#00d4ff"></div>
+    <div class="field-row"><div class="field-label">Pi-hole Group Name</div><input class="field-input" id="edit-profile-pihole" style="width:100%" placeholder="e.g. child1  (leave blank if not using Pi-hole groups)"></div>
+
+    <!-- ── BLOCKED SITES ── -->
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--cyan);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">🚫 Blocked Sites for this Profile</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.7">
+        Domains entered here are blocked only for devices in this profile.
+        Everyone else is unaffected. Saves locally immediately —
+        pushed to Pi-hole automatically if Pi-hole is connected.
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="field-input" id="new-blocked-domain"
+          placeholder="youtube.com"
+          style="flex:1;font-size:12px"
+          onkeydown="if(event.key==='Enter')addBlockedDomain()">
+        <button class="btn primary" onclick="addBlockedDomain()" style="white-space:nowrap">+ Block</button>
+      </div>
+      <div id="blocked-domain-list" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto"></div>
+      <div id="blocked-domain-status" style="font-size:10px;color:var(--muted);margin-top:6px;min-height:16px"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" style="margin-right:auto" onclick="openScheduleEditorFromProfile()">📅 Edit Schedule &amp; Daily Limits</button>
+      <button class="btn danger" onclick="deleteProfileConfirm()">🗑 Delete</button>
+      <button class="btn" onclick="closeModal('edit-profile-modal')">Cancel</button>
+      <button class="btn primary" onclick="saveProfileEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ═══════════════════════ BACKEND CONNECTION ═══════════════════════
+// Change this if your Flask API runs somewhere other than the same
+// machine on port 5000 — e.g. "http://192.168.1.10:5000" if the
+// dashboard page is served separately from the backend.
+const API_BASE = "http://YOUR_SERVER_IP:8082";
+
+// Used by both the schedule editor UI and the profile-mapping logic below
+// to consistently order and label the 7 days of the week.
+const DAY_ORDER = ['mon','tue','wed','thu','fri','sat','sun'];
+const DAY_LABELS = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' };
+
+// These start empty and get filled in by loadDataFromServer() when the
+// page boots. Every render function below still reads from these same
+// two arrays — only how they get FILLED has changed; we kept the field
+// names (name, profile, status, note, window, killable) identical to
+// the original mock data so none of the render functions had to change.
+let DEVICES_ALL = [];
+let PROFILES_ALL = [];
+let killStates = [];
+let apiOffline = false;
+
+// ── Convert what the backend sends into the shape the dashboard expects ──
+function mapServerProfile(p) {
+  // The backend's /api/status endpoint already computes today's exact
+  // schedule window, budget remaining, and whether access is currently
+  // allowed (compute_access_state in netwatch_api.py). We just read
+  // that here rather than re-deriving it in JavaScript — this way the
+  // dashboard can never disagree with the backend about whether
+  // someone currently has access.
+  const access = p.access || {};
+
+  const noteFor = () => {
+    if (access.reason === 'killed') return 'Blocked by kill switch';
+    if (access.reason === 'no_access_today') return 'No access scheduled today';
+    if (access.reason === 'before_window') return `Starts at ${access.today_start}`;
+    if (access.reason === 'after_window') return `Ended at ${access.today_end}`;
+    if (access.reason === 'budget_exhausted') return 'Daily time limit reached';
+    if (!p.killable) return 'Allowed';
+    if (access.minutes_remaining != null) {
+      const h = Math.floor(access.minutes_remaining / 60);
+      const m = access.minutes_remaining % 60;
+      return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+    }
+    return 'Allowed';
+  };
+
+  const windowLabel = (access.today_start === '00:00' && access.today_end === '23:59')
+    ? 'Unrestricted'
+    : (access.today_start === access.today_end)
+      ? 'No access today'
+      : `${access.today_start} – ${access.today_end}`;
+
+  return {
+    id: p.id,
+    name: p.name,
+    window: windowLabel,
+    status: access.allowed ? 'allowed' : 'blocked',
+    note: noteFor(),
+    color: p.color,
+    icon: p.icon,
+    killable: p.killable,
+    killed: p.killed,
+    pihole_group: p.pihole_group,
+    schedule: p.schedule,           // full 7-day schedule, used by the editor UI
+    daily_limit_minutes: access.daily_limit_minutes,
+    minutes_used_today: access.minutes_used_today,
+    minutes_remaining_budget: access.minutes_remaining_budget,
+    blocked_domains: p.blocked_domains || [],
+  };
+}
+
+function mapServerDevice(d, profileLookup) {
+  const owner = profileLookup[d.profile_id];
+  return {
+    id: d.id,
+    name: d.name,
+    ip: d.ip,
+    mac: d.mac,
+    type: d.type,
+    last: d.status === 'online' ? 'Just now' : 'Unknown',
+    status: d.status || 'unknown',
+    icon: d.icon,
+    profile: owner ? owner.name : null,
+    profile_id: d.profile_id,
+  };
+}
+
+// ── Auth login / logout ──────────────────────────────────────────
+async function doLogin() {
+  const pw  = document.getElementById('login-pw').value;
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    const d = await res.json();
+    if (d.ok) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display    = '';
+      document.getElementById('login-pw').value = '';
+      bootDashboard();
+    } else {
+      err.style.display = 'block';
+      document.getElementById('login-pw').select();
+    }
+  } catch (e) {
+    err.textContent = 'Cannot reach server — is netwatch_api.py running?';
+    err.style.display = 'block';
+  }
+}
+
+async function doLogout() {
+  try { await fetch(`${API_BASE}/api/auth/logout`, { method:'POST', credentials:'include' }); }
+  catch(e) {}
+  document.getElementById('dashboard').style.display    = 'none';
+  document.getElementById('login-screen').style.display = '';
+}
+
+// Restore session on page reload (browser keeps the session cookie)
+async function checkExistingSession() {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/status`, { credentials:'include' });
+    const d   = await res.json();
+    if (d.authenticated) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display    = '';
+      bootDashboard();
+    }
+    // else stay on login screen
+  } catch(e) {
+    // Server not reachable — stay on login screen
+    const err = document.getElementById('login-error');
+    err.textContent = 'Cannot reach server at ' + API_BASE;
+    err.style.display = 'block';
+  }
+}
+
+// ── All API calls include session cookie and redirect on 401 ─────
+async function _apiFetch(path, opts={}) {
+  opts.credentials = 'include';
+  const res = await fetch(`${API_BASE}${path}`, opts);
+  if (res.status === 401) {
+    // Auth is currently disabled — if this fires something is misconfigured
+    throw new Error('AUTH_REQUIRED (unexpected — auth is disabled)');
+  }
+  if (!res.ok) {
+    const e = await res.json().catch(()=>({}));
+    throw new Error(e.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiGet(path)        { return _apiFetch(path); }
+async function apiPost(path, body) {
+  return _apiFetch(path, { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined });
+}
+async function apiPatch(path, body) {
+  return _apiFetch(path, { method:'PATCH',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+}
+async function apiDelete(path) {
+  return _apiFetch(path, { method:'DELETE' });
+}
+
+// ── Pull everything from /api/status in one call, update live globals ──
+async function loadDataFromServer() {
+  try {
+    const s = await apiGet('/api/status');
+
+    // Profiles + devices
+    PROFILES_ALL = s.profiles.map(mapServerProfile);
+    killStates   = PROFILES_ALL.map(p => !!p.killed);
+    const profileLookup = {};
+    s.profiles.forEach(p => profileLookup[p.id] = p);
+    DEVICES_ALL = s.devices.map(d => mapServerDevice(d, profileLookup));
+
+    // Store live globals used by charts + stat cards
+    LIVE.onlineCount     = s.online_count;
+    LIVE.totalDevices    = s.total_devices;
+    LIVE.bandwidth       = s.bandwidth  || {};
+    LIVE.alertCount      = s.alert_count || 0;
+    LIVE.activeAlerts    = s.active_alerts || [];
+    LIVE.deviceTypes     = s.device_types  || {};
+    LIVE.newDevices24h   = s.new_devices_24h || 0;
+    LIVE.piholeConnected = s.pihole_connected || false;
+    LIVE.wazuhConnected  = s.wazuh_connected  || false;
+
+    // Sync server uptime — keep ticking from the real value
+    if (s.uptime_seconds) uptimeSeconds = s.uptime_seconds;
+
+    // Update stat cards in place (no full re-render needed)
+    updateStatCards();
+
+    if (apiOffline) {
+      apiOffline = false;
+      showToast('🟢  Reconnected to NET-WATCH', 'var(--green)');
+    }
+    return true;
+  } catch (err) {
+    if (!apiOffline) { apiOffline = true; }
+    return false;
+  }
+}
+
+// Separate live-data object — charts read from this instead of fake constants
+const LIVE = {
+  onlineCount: 0, totalDevices: 0,
+  bandwidth: {}, alertCount: 0, activeAlerts: [], deviceTypes: {},
+  traffic: { labels:[], rx:[], tx:[] },
+  bwClients: [],
+  wazuhEvents: [],
+  alertCounts7d: [],
+};
+
+// Fetch the three real-data endpoints that /api/status doesn't include
+async function loadLiveChartData() {
+  try {
+    const [traffic, clients, alerts, alertCounts] = await Promise.all([
+      apiGet('/api/traffic'),
+      apiGet('/api/bandwidth/clients'),
+      apiGet('/api/alerts/wazuh?limit=10&level=5'),
+      apiGet('/api/alerts/counts'),
+    ]);
+    LIVE.traffic       = traffic;
+    LIVE.bwClients     = clients;
+    LIVE.wazuhEvents   = alerts.events   || [];
+    LIVE.alertCounts7d = alertCounts.days || [];
+  } catch(e) {
+    // Non-critical — charts stay at previous values if this fails
+  }
+}
+
+function updateStatCards() {
+  const el = id => document.getElementById(id);
+  const bw  = LIVE.bandwidth || {};
+  const bwBytes = bw.total_bytes || 0;
+  if      (bwBytes >= 1024**4)      bwDisplay = (bwBytes / 1024**4).toFixed(2) + ' TB';
+  else if (bwBytes >= 1024**3)      bwDisplay = (bwBytes / 1024**3).toFixed(2) + ' GB';
+  else if (bwBytes >= 1024**2)      bwDisplay = (bwBytes / 1024**2).toFixed(1) + ' MB';
+  else if (bwBytes > 0)             bwDisplay = (bwBytes / 1024).toFixed(0)    + ' KB';
+  else                              bwDisplay = '— MB';
+  const on  = LIVE.onlineCount  || 0;
+  const tot = LIVE.totalDevices || 0;
+  const off = DEVICES_ALL.filter(d => d.status === 'offline').length;
+  const unk = DEVICES_ALL.filter(d => d.status === 'unknown').length;
+
+  if (el('stat-online'))    el('stat-online').textContent = on;
+  if (el('stat-total'))     el('stat-total').textContent  = `of ${tot} total`;
+  if (el('stat-bw'))        el('stat-bw').textContent     = bwDisplay;
+  if (el('stat-alerts'))    el('stat-alerts').textContent = LIVE.alertCount || 0;
+  // Active users = profiles that currently have allowed access
+  const activeProfiles = PROFILES_ALL.filter(p => p.status === 'allowed').length;
+  const totalProfiles  = PROFILES_ALL.length;
+  if (el('stat-users'))     el('stat-users').textContent     = activeProfiles;
+  if (el('stat-users-sub')) el('stat-users-sub').textContent = `of ${totalProfiles} profiles`;
+  if (el('stat-alert-sub')) {
+    el('stat-alert-sub').textContent = (LIVE.alertCount || 0) === 0 ? 'All Clear' : 'Active';
+    el('stat-alert-sub').className   = (LIVE.alertCount || 0) === 0 ? 'stat-sub green' : 'stat-sub red';
+  }
+  if (el('devices-page-hdr'))
+    el('devices-page-hdr').textContent = `${tot} registered devices · ${on} online · ${off} offline · ${unk} unknown`;
+  if (el('dev-status-count'))
+    el('dev-status-count').innerHTML = `<span style="color:var(--green)">${on} Online</span> <span style="color:var(--red)">${off} Offline</span> <span style="color:var(--yellow)">${unk} Unknown</span>`;
+  if (el('stat-new-devices'))
+    el('stat-new-devices').textContent = LIVE.newDevices24h || 0;
+  if (el('report-bw-val'))
+    el('report-bw-val').textContent = bwDisplay;
+}
+
+// NET_ITEMS is now built from real API data via renderNetStatus()
+// Falls back to a placeholder until the first poll completes.
+const NET_ITEMS_DEFAULT = [
+  {name:'Checking network...', status:'unknown'},
+];
+
+// BW_DATA is now populated from /api/bandwidth/clients (Pi-hole or fallback)
+// and stored in LIVE.bwClients. Use getBWData() wherever BW_DATA was used.
+const BW_COLORS = ['#00e87a','#00d4ff','#a855f7','#ffc740','#ff8c00','#3b82f6'];
+function getBWData() {
+  if (!LIVE.bwClients || !LIVE.bwClients.length) return [];
+  return LIVE.bwClients.map((c,i) => ({
+    name:  c.name,
+    ip:    c.ip,
+    pct:   c.pct,
+    // If Pi-hole connected: show DNS query count. If fallback: show % only
+    gb:    c.count > 0 ? c.count.toLocaleString() + ' q' : '—',
+    color: c.color || BW_COLORS[i % BW_COLORS.length],
+  }));
+}
+
+// Quick Controls — built dynamically from real profiles at runtime
+// Falls back to a placeholder until profiles are created
+const CONTROLS = [];
+
+// FAKE_ALERTS and WAZUH_EVENTS replaced by LIVE.activeAlerts and LIVE.wazuhEvents
+// populated from /api/alerts/wazuh (Wazuh API) or empty if WAZUH_ENABLED=false.
+function getAlerts()      { return LIVE.activeAlerts || []; }
+function getWazuhEvents() { return LIVE.wazuhEvents  || []; }
+
+// Firewall rules — requires UFW/iptables integration to populate
+// Empty until integrated — renderFWRules() shows an honest message
+const FW_RULES = [];
+
+// VLANs — built from SCAN_SUBNETS in netwatch_api.py
+// Update SCAN_SUBNETS on your server when you add VLANs
+const VLANS = [
+  {id:1, name:'Main LAN', subnet:'192.168.x.0/24', devices: 0},
+];
+
+// Pi-hole blocklists — populated from Pi-hole API when connected
+const BLOCKLISTS = [];
+  {name:'Adult Content',         domains:'17,204',  active:true},
+];
+
+// Blocked domains — populated from Pi-hole when PIHOLE_ENABLED=true
+// Until then, showing empty.
+const BLOCKED_DOMAINS = [];
+
+// Vulnerability data — populated from Wazuh when WAZUH_ENABLED=true
+const VULN_DATA = [];
+
+// Active connections — requires a packet capture tool (e.g. ntopng or Zeek)
+// to populate with real data. Showing empty until integrated.
+const CONNS = [];
+
+const MITRE_TACTICS = [
+  {id:'TA0001',name:'Initial Access',   color:'#ff4557', covered:true},
+  {id:'TA0002',name:'Execution',        color:'#ff8c00', covered:true},
+  {id:'TA0003',name:'Persistence',      color:'#ffc740', covered:true},
+  {id:'TA0004',name:'Priv Escalation',  color:'#a855f7', covered:true},
+  {id:'TA0005',name:'Defense Evasion',  color:'#3b82f6', covered:false},
+  {id:'TA0006',name:'Credential Access',color:'#00d4ff', covered:true},
+  {id:'TA0007',name:'Discovery',        color:'#00e87a', covered:true},
+  {id:'TA0008',name:'Lateral Movement', color:'#ff4557', covered:false},
+  {id:'TA0009',name:'Collection',       color:'#ff8c00', covered:false},
+  {id:'TA0010',name:'Exfiltration',     color:'#ffc740', covered:true},
+  {id:'TA0011',name:'Command & Control',color:'#a855f7', covered:true},
+  {id:'TA0040',name:'Impact',           color:'#ff4557', covered:false},
+];
+
+// DEVICE_TYPES is now computed live from LIVE.deviceTypes (set by /api/status)
+const DT_COLOR_MAP = {
+  Desktop:'#00d4ff', Server:'#00e87a', Mobile:'#a855f7',
+  IoT:'#ffc740', TV:'#ff8c00', Laptop:'#00d4ff',
+  Tablet:'#a855f7', Console:'#3b82f6', Unknown:'#ff4557',
+};
+function getDeviceTypes() {
+  if (!LIVE.deviceTypes || !Object.keys(LIVE.deviceTypes).length) {
+    // fallback: count from DEVICES_ALL if status not yet populated
+    const map = {};
+    DEVICES_ALL.forEach(d => { map[d.type] = (map[d.type]||0)+1; });
+    return Object.entries(map).map(([t,c],i) => ({
+      type:t, count:c, color:DT_COLOR_MAP[t]||'#5a6580' }));
+  }
+  return Object.entries(LIVE.deviceTypes).map(([t,c]) => ({
+    type:t, count:c, color:DT_COLOR_MAP[t]||'#5a6580' }));
+}
+
+// Protocol breakdown — requires deep packet inspection (e.g. ntopng)
+// Showing empty until integrated.
+const PROTO_DATA = [];
+
+// Alert history — populated from Wazuh when WAZUH_ENABLED=true
+// Until then showing empty — no fake alerts.
+const ALERT_HISTORY = [];
+
+// Access log — will populate from real profile kill switch events
+// Empty until profiles are set up and events occur.
+const ACCESS_LOG = [];
+
+const INTEGRATIONS_DATA = [
+  {name:'Pi-hole',        desc:'DNS sinkhole & ad blocking',  url:'', on:false},
+  {name:'Wazuh SIEM',     desc:'Security event management',   url:'', on:false},
+  {name:'vnstat',         desc:'Network traffic statistics',  url:'', on:false},
+];
+
+const NOTIF_DATA = [
+  {name:'New device joined',    desc:'Alert when unknown device connects', on:true},
+  {name:'Security alert fired', desc:'Push when Wazuh level ≥ 10',        on:true},
+  {name:'Device went offline',  desc:'Notify if known device drops',      on:false},
+  {name:'Daily summary',        desc:'Email digest at 08:00',             on:true},
+];
+
+// ═══════════════════════ STATE ═══════════════════════
+let alertsActive = false;
+let countdown = 10;
+let uptimeSeconds = 0; // populated from /api/status on first poll
+let bwDisplay = '— MB'; // updated by updateStatCards on every poll
+let trafficChart, donutChart, devicesBarChart, deviceTypeChart;
+let scheduleChart, dnsChart, protoChart, portChart;
+let alertVolChart, agentsChart, weeklyBwChart, monthlyAlertsChart;
+let ctrlStates = CONTROLS.map(() => false);
+let trafficData = {rx:[],tx:[],labels:[]};
+let currentPage = 'overview';
+let chartsBuilt = {};
+let toggleStates = {};
+
+// ═══════════════════════ NAV ═══════════════════════
+function navTo(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.page === page);
+  });
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.add('active');
+  currentPage = page;
+  const titles = {overview:'NETOPS HOME LAB — Overview',devices:'Devices',users:'Users / Profiles',
+    access:'Access Control',map:'Network Map',security:'Security',alerts:'Alerts',reports:'Reports',settings:'Settings'};
+  document.getElementById('page-title').textContent = titles[page] || page;
+  buildPageCharts(page);
+}
+
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => navTo(el.dataset.page));
+});
+
+// ═══════════════════════ RENDER FUNCTIONS ═══════════════════════
+function renderSmallDeviceList(id, max) {
+  document.getElementById(id).innerHTML = DEVICES_ALL.slice(0,max).map(d => `
+    <div class="device-row">
+      <span class="device-icon">${d.icon}</span>
+      <div class="device-info"><div class="device-name">${d.name}</div><div class="device-ip">${d.ip}</div></div>
+      <span class="device-status ${d.status}">${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</span>
+    </div>`).join('');
+}
+
+function renderSmallProfileList(id, max) {
+  document.getElementById(id).innerHTML = PROFILES_ALL.slice(0,max).map(p => `
+    <div class="profile-row">
+      <div class="profile-avatar" style="background:${p.color}22;border:1px solid ${p.color}44;">${p.icon}</div>
+      <div class="profile-info"><div class="profile-name">${p.name}</div><div class="profile-window">${p.window}</div></div>
+      <div style="text-align:right">
+        <div class="profile-badge ${p.status}">${p.status.charAt(0).toUpperCase()+p.status.slice(1)}</div>
+        <div class="profile-rule">${p.note}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderNetStatus() {
+  const el = document.getElementById('net-status');
+  if (!el) return;
+
+  // Build net status from real scanned devices — servers and infrastructure first
+  const serverTypes = ['Server', 'Firewall', 'Router', 'IoT'];
+  let items = [];
+
+  // Add server-type devices from real scan data
+  const servers = DEVICES_ALL.filter(d =>
+    serverTypes.some(t => (d.type||'').toLowerCase().includes(t.toLowerCase())) ||
+    (d.name||'').toLowerCase().includes('server') ||
+    (d.name||'').toLowerCase().includes('firewall') ||
+    (d.name||'').toLowerCase().includes('router') ||
+    (d.name||'').toLowerCase().includes('pi-hole') ||
+    (d.name||'').toLowerCase().includes('pihole')
+  ).slice(0, 5);
+
+  if (servers.length > 0) {
+    items = servers.map(d => ({
+      name:   d.name,
+      status: d.status === 'online' ? 'up' : 'down'
+    }));
+  } else if (DEVICES_ALL.length > 0) {
+    // No servers tagged yet — show first 5 online devices
+    items = DEVICES_ALL.filter(d => d.status === 'online').slice(0, 5).map(d => ({
+      name:   d.name || d.ip,
+      status: 'up'
+    }));
+  } else {
+    // No devices yet — show placeholder
+    items = NET_ITEMS_DEFAULT;
+  }
+
+  // Always add internet status at the bottom
+  const hasInternet = LIVE.onlineCount > 0;
+  if (!items.find(i => i.name.toLowerCase().includes('internet'))) {
+    items.push({name: 'Internet Connection', status: hasInternet ? 'up' : 'unknown'});
+  }
+
+  el.innerHTML = items.map(n => `
+    <div class="ns-row">
+      <div class="ns-dot ${n.status}"></div>
+      <div class="ns-name">${n.name}</div>
+      <div class="ns-status ${n.status}">${n.status === 'up' ? 'Up' : n.status === 'down' ? 'Down' : '—'}</div>
+    </div>`).join('');
+}
+
+function renderBWList() {
+  const BW_DATA = getBWData();
+  const isPihole = LIVE.bwClients && LIVE.bwClients.some(c => c.count > 0);
+
+  // Update panel title to reflect data source
+  const titleEl = document.querySelector('#page-overview .panel-title');
+  // find the Top Bandwidth title specifically
+  document.querySelectorAll('#page-overview .panel-title').forEach(el => {
+    if (el.textContent.startsWith('Top Bandwidth') || el.textContent.startsWith('Top DNS')) {
+      el.textContent = isPihole ? 'Top DNS Clients' : 'Top Bandwidth';
+    }
+  });
+
+  if (!BW_DATA.length) {
+    document.getElementById('bw-list').innerHTML =
+      '<div style="font-size:10px;color:var(--muted);padding:8px 4px">No data yet — scan network first</div>';
+    return;
+  }
+
+  document.getElementById('bw-list').innerHTML = BW_DATA.map(b => `
+    <div class="bw-row">
+      <div class="bw-dot" style="background:${b.color}"></div>
+      <div class="bw-name">${b.name}</div>
+      <div class="bw-pct">${b.pct}%</div>
+      <div class="bw-gb">${b.gb}</div>
+    </div>`).join('');
+}
+
+function renderControls() {
+  document.getElementById('controls-row').innerHTML = CONTROLS.map((c,i) => `
+    <button class="ctrl-btn" onclick="toggleControl(${i})"
+      style="border-color:${ctrlStates[i]?c.color:'var(--border)'};${ctrlStates[i]?'background:'+c.bg:''}">
+      <div class="ctrl-btn-icon" style="background:${c.bg};border:1px solid ${c.color}33;">${c.icon}</div>
+      <div>
+        <div class="ctrl-label" style="${ctrlStates[i]?'color:'+c.color:''}">${c.label}</div>
+        <div class="ctrl-sub">${ctrlStates[i]?'Active · ':''} ${c.sub}</div>
+      </div>
+    </button>`).join('');
+}
+
+function renderAlerts() {
+  const badge   = document.getElementById('alert-count-badge');
+  const body    = document.getElementById('security-body');
+  const statEl  = document.getElementById('stat-alerts');
+  const subEl   = document.getElementById('stat-alert-sub');
+  const bellC   = document.getElementById('bell-count');
+  const navB    = document.getElementById('nav-badge');
+  const abadge  = document.getElementById('active-alerts-badge');
+  const abody   = document.getElementById('alerts-active-body');
+  const apgsub  = document.getElementById('alert-page-sub');
+  const alCrit  = document.getElementById('al-critical');
+  const alHigh  = document.getElementById('al-high');
+  const secThr  = document.getElementById('sec-threat-val');
+  const secSub  = document.getElementById('sec-threat-sub');
+
+  // Use real Wazuh alerts if available; fall back to alertsActive toggle for testing
+  const liveAlerts = getAlerts();
+  if (liveAlerts.length > 0 || alertsActive) {
+    const cnt = liveAlerts.length || 0;
+    [badge,abadge].forEach(b=>{if(b){b.textContent=cnt+' Active Alerts';b.style.background='rgba(255,69,87,.15)';b.style.color='var(--red)'}});
+    statEl.textContent = cnt; statEl.style.color='var(--red)';
+    subEl.textContent='Action Required'; subEl.className='stat-sub red';
+    bellC.textContent=cnt; bellC.style.display='flex';
+    navB.textContent=cnt; navB.style.display='';
+    if(apgsub) apgsub.textContent = cnt+' active alerts · Action required';
+    if(alCrit) alCrit.textContent='1';
+    if(alHigh) alHigh.textContent='1';
+    if(secThr){secThr.textContent='HIGH';secThr.style.color='var(--red)';}
+    if(secSub){secSub.textContent='2 active threats';secSub.className='stat-sub red';}
+
+    const alertSrc = liveAlerts.length ? liveAlerts : [{rule:'Simulated alert (Wazuh not connected)',level:'medium',agent:'—',time:'—',mitre:'—'}];
+    const alertHTML = `<div class="alert-list">` + alertSrc.map(a=>{
+      const lvl = typeof a.level === 'number'
+        ? (a.level>=12?'critical':a.level>=9?'high':a.level>=6?'medium':'low')
+        : (a.level||'medium');
+      return `<div class="alert-item" style="border-left:3px solid ${lvl==='critical'||lvl==='high'?'var(--red)':'var(--yellow)'}">
+        <div class="alert-rule">${a.rule}</div>
+        <div class="alert-meta">
+          <span class="alert-level lvl-${lvl}">${lvl.toUpperCase()}</span>
+          <span>${a.agent||''}</span><span>${a.time||''}</span><span class="mitre-tag">${a.mitre||''}</span>
+        </div></div>`;}).join('') + `</div>`;
+
+    body.innerHTML = alertHTML;
+    if(abody) abody.innerHTML = alertHTML;
+  } else {
+    [badge,abadge].forEach(b=>{if(b){b.textContent='0 Active Alerts';b.style.background='';b.style.color=''}});
+    statEl.textContent='0'; statEl.style.color='';
+    subEl.textContent='All Clear'; subEl.className='stat-sub green';
+    bellC.style.display='none'; navB.style.display='none';
+    if(apgsub) apgsub.textContent='0 active alerts · All systems nominal';
+    if(alCrit) alCrit.textContent='0';
+    if(alHigh) alHigh.textContent='0';
+    if(secThr){secThr.textContent='LOW';secThr.style.color='var(--green)';}
+    if(secSub){secSub.textContent='No active threats';secSub.className='stat-sub green';}
+    body.innerHTML=`<div class="shield-icon">🛡️</div><div class="shield-title" style="margin-top:8px">All Clear!</div><div class="shield-sub">No active security alerts<br>Your network is secure.</div>`;
+    if(abody) abody.innerHTML=`<div style="padding:32px;text-align:center"><div style="font-size:40px;margin-bottom:10px">🛡️</div><div style="font-family:var(--mono);color:var(--green);font-size:14px;margin-bottom:6px">All Clear</div><div style="color:var(--muted);font-size:12px">No active alerts. Click "Simulate Alert" to test.</div></div>`;
+  }
+}
+
+function renderDevicesTable() {
+  document.getElementById('devices-tbody').innerHTML = DEVICES_ALL.map(d => {
+    const owner = PROFILES_ALL.find(p => p.name === d.profile);
+    const ownerColor = owner ? owner.color : null;
+
+    // Inline profile dropdown — changing it immediately reassigns the device
+    const opts = `<option value="" ${!d.profile_id ? 'selected':''}>— Unassigned —</option>` +
+      PROFILES_ALL.map(p =>
+        `<option value="${p.id}" ${d.profile_id===p.id?'selected':''}>${p.icon} ${p.name}</option>`
+      ).join('');
+    const profileSelect = `<select class="field-select" style="font-size:10px;padding:3px 6px;max-width:140px"
+        onchange="reassignDevice('${d.id}',this.value)">${opts}</select>`;
+
+    return `
+    <tr>
+      <td style="cursor:pointer" onclick="openDeviceEdit('${d.id}')">
+        <span style="margin-right:6px">${d.icon}</span>
+        <b>${d.name}</b>
+        <span style="font-size:10px;color:var(--cyan);margin-left:4px">✎</span>
+      </td>
+      <td class="mono">${d.ip}</td>
+      <td class="mono" style="font-size:10px">${d.mac}</td>
+      <td>${d.type}</td>
+      <td>${profileSelect}</td>
+      <td style="color:var(--muted);font-size:11px">${d.last}</td>
+      <td><span class="device-status ${d.status}">${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</span></td>
+      <td><button class="btn" style="padding:4px 10px;font-size:10px" onclick="openDeviceEdit('${d.id}')">✎ Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+
+
+function renderProfileCards() {
+  document.getElementById('profile-cards').innerHTML = PROFILES_ALL.map((p, i) => {
+    // Find every device whose `profile` field matches this card's name
+    const myDevices = DEVICES_ALL.filter(d => d.profile === p.name);
+    const isKilled = killStates[i];
+
+    // Build a little chip for each assigned device, or a placeholder if none
+    const deviceChips = myDevices.length
+      ? myDevices.map(d => `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--s3);color:var(--text);display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0">${d.icon} ${d.name}</span>`).join('')
+      : `<span style="font-size:10px;color:var(--muted)">No devices assigned</span>`;
+
+    // If this profile has been kill-switched, override the badge to show "Killed"
+    const badgeLabel = isKilled ? '⛔ Killed' : (p.status==='allowed' ? '✓ Allowed' : '✗ Blocked');
+    const badgeClass = isKilled ? 'blocked' : p.status;
+
+    // Admin (You) is marked not-killable in the data, so we hide the button for it
+    const killButton = p.killable
+      ? `<button class="btn ${isKilled?'':'danger'}" style="margin-top:10px;width:100%;font-size:11px;${isKilled?'background:rgba(0,232,122,.12);border-color:rgba(0,232,122,.4);color:var(--green)':''}"
+           onclick="event.stopPropagation(); toggleKillSwitch(${i})">
+           ${isKilled ? '↺ Restore Access' : '⛔ Kill Switch — Block All Devices'}
+         </button>`
+      : '';
+
+    // Real budget bar: if this profile has a daily_limit_minutes set for
+    // today, show how much of it has been used. If there's no limit
+    // (null), the bar shows full whenever access is currently allowed,
+    // since there's nothing to "use up" — just a window to be inside of.
+    let budgetPct, budgetColor;
+    if (isKilled) {
+      budgetPct = 0; budgetColor = 'var(--red)';
+    } else if (p.daily_limit_minutes == null) {
+      budgetPct = (p.status === 'allowed') ? 100 : 0;
+      budgetColor = p.color;
+    } else {
+      const used = p.minutes_used_today || 0;
+      budgetPct = Math.max(0, Math.min(100, Math.round(100 - (used / p.daily_limit_minutes) * 100)));
+      budgetColor = budgetPct < 20 ? 'var(--red)' : budgetPct < 50 ? 'var(--yellow)' : p.color;
+    }
+    const budgetLabel = (p.daily_limit_minutes != null)
+      ? `${p.minutes_used_today || 0} / ${p.daily_limit_minutes} min used today`
+      : null;
+
+    const editScheduleButton = `<button class="btn" style="margin-top:8px;width:100%;font-size:11px"
+        onclick="event.stopPropagation(); openScheduleEditor(${i})">
+        ✎ Edit Schedule &amp; Daily Limit
+      </button>`;
+
+    const blockedCount    = p.schedule && Array.isArray(p.blocked_domains) ? p.blocked_domains.length : 0;
+    const blockedBadge    = blockedCount > 0
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:3px;
+            background:rgba(255,69,87,.12);border:1px solid rgba(255,69,87,.3);
+            color:var(--red)">🚫 ${blockedCount} site${blockedCount!==1?'s':''} blocked</span>`
+      : `<span style="font-size:9px;color:var(--muted)">No sites blocked</span>`;
+
+    return `
+    <div class="panel" style="cursor:pointer" onclick="openProfileEdit(${i})">
+      <div class="panel-header" style="border-bottom:none">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:50%;background:${p.color}22;border:1px solid ${p.color}44;display:flex;align-items:center;justify-content:center;font-size:18px">${p.icon}</div>
+          <div><div style="font-weight:600;color:#fff">${p.name}</div><div style="font-size:10px;color:var(--muted)">Today: ${p.window}</div></div>
+        </div>
+        <span class="profile-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div style="padding:0 16px 14px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px">
+          <span>${budgetLabel ? 'Daily budget' : 'Time remaining'}</span><span style="color:${isKilled?'var(--red)':(p.status==='allowed'?'var(--green)':'var(--red)')}">${isKilled?'Blocked by kill switch':p.note}</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="background:${budgetColor};width:${budgetPct}%"></div></div>
+        ${budgetLabel ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right">${budgetLabel}</div>` : ''}
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Assigned Devices (${myDevices.length})</div>
+            ${blockedBadge}
+          </div>
+          <div>${deviceChips}</div>
+        </div>
+        ${editScheduleButton}
+        ${killButton}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleKillSwitch(i) {
+  const p = PROFILES_ALL[i];
+  if (!p.id) { showToast('Cannot kill switch — profile has no server ID', 'var(--red)'); return; }
+
+  try {
+    const result = await apiPost(`/api/profiles/${p.id}/killswitch`);
+    showToast(
+      result.killed
+        ? `⛔ Kill switch activated — ${result.devices_affected} device(s) on "${result.profile_name}" blocked`
+        : `↺ Access restored for "${result.profile_name}"`,
+      result.killed ? 'var(--red)' : 'var(--green)'
+    );
+    await loadDataFromServer();
+    renderProfileCards();
+    renderSmallProfileList('profile-list-ov', 5);
+    renderDevicesTable();
+  } catch (err) {
+    showToast(`Kill switch failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+// ── Fills the "Assign to Profile" dropdown inside the Add Device modal ──
+function populateProfileDropdown() {
+  const sel = document.getElementById('new-device-profile');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">— Unassigned —</option>` +
+    PROFILES_ALL.map(p => `<option value="${p.id}">${p.icon} ${p.name}</option>`).join('');
+}
+
+// ── Called by the "Add Device" button inside the modal ──
+async function submitNewDevice() {
+  const name = document.getElementById('new-device-name').value.trim();
+  const ip   = document.getElementById('new-device-ip').value.trim();
+  const type = document.getElementById('new-device-type').value;
+  const profileId = document.getElementById('new-device-profile').value || null;
+
+  if (!name || !ip) {
+    showToast('Device name and IP address are both required', 'var(--yellow)');
+    return;
+  }
+
+  const iconMap = { Desktop:'🖥️', Server:'🗄️', Mobile:'📱', IoT:'🔔', 'Game Console':'🎮', TV:'📺' };
+
+  try {
+    await apiPost('/api/devices', {
+      name, ip, type,
+      icon: iconMap[type] || '💻',
+      profile_id: profileId,
+    });
+    closeModal('add-device-modal');
+    showToast(`✅ "${name}" added`, 'var(--green)');
+    document.getElementById('new-device-name').value = '';
+    document.getElementById('new-device-ip').value = '';
+    await loadDataFromServer();
+    renderDevicesTable();
+    renderProfileCards();
+    renderSmallDeviceList('device-list-ov', 5);
+  } catch (err) {
+    showToast(`Couldn't add device: ${err.message}`, 'var(--red)');
+  }
+}
+
+// ── Called by the "Create" button inside the New Profile modal ──
+async function submitNewProfile() {
+  const name  = document.getElementById('new-profile-name').value.trim();
+  const start = document.getElementById('new-profile-start').value || '00:00';
+  const end   = document.getElementById('new-profile-end').value || '23:59';
+
+  if (!name) {
+    showToast('Profile name is required', 'var(--yellow)');
+    return;
+  }
+
+  // Cycle through a small palette so new profiles don't all look identical
+  const palette = ['#00d4ff','#00e87a','#a855f7','#ffc740','#ff8c00','#3b82f6','#ff4557'];
+  const color = palette[PROFILES_ALL.length % palette.length];
+
+  // Apply the same start/end to every day of the week as a starting point.
+  // No daily limit by default — the user can set per-day limits afterward
+  // using the "Edit Schedule & Daily Limit" button on the new card.
+  const schedule = {};
+  DAY_ORDER.forEach(day => { schedule[day] = { start, end, daily_limit_minutes: null }; });
+
+  try {
+    await apiPost('/api/profiles', {
+      name,
+      schedule,
+      color,
+      icon: '👤',
+    });
+    closeModal('add-profile-modal');
+    showToast(`✅ Profile "${name}" created`, 'var(--green)');
+    document.getElementById('new-profile-name').value = '';
+    await loadDataFromServer();
+    renderProfileCards();
+    renderSmallProfileList('profile-list-ov', 5);
+    populateProfileDropdown();
+  } catch (err) {
+    showToast(`Couldn't create profile: ${err.message}`, 'var(--red)');
+  }
+}
+
+// ═══════════════════ SCHEDULE EDITOR (per-day window + daily budget) ═══════════════════
+
+// Keeps track of which profile index the editor is currently open for,
+// so saveScheduleEditor() knows where to send the PATCH request.
+let scheduleEditorProfileIndex = null;
+
+function openScheduleEditor(profileIndex) {
+  const p = PROFILES_ALL[profileIndex];
+  if (!p.id) { showToast('This profile has no server ID yet', 'var(--red)'); return; }
+  scheduleEditorProfileIndex = profileIndex;
+
+  document.getElementById('schedule-editor-title').textContent = `Edit Schedule — ${p.name}`;
+
+  const schedule = p.schedule || {};
+  const rows = DAY_ORDER.map(day => {
+    const d = schedule[day] || { start: '00:00', end: '23:59', daily_limit_minutes: null };
+    const limitValue = (d.daily_limit_minutes === null || d.daily_limit_minutes === undefined) ? '' : d.daily_limit_minutes;
+    return `
+      <div style="display:grid;grid-template-columns:90px 1fr 1fr 90px;gap:8px;align-items:center;padding:8px;background:var(--s2);border-radius:6px">
+        <div style="font-size:12px;color:var(--text);font-weight:500">${DAY_LABELS[day]}</div>
+        <input type="time" class="field-input sched-start" data-day="${day}" value="${d.start}" style="width:100%;font-size:11px;padding:6px 8px">
+        <input type="time" class="field-input sched-end" data-day="${day}" value="${d.end}" style="width:100%;font-size:11px;padding:6px 8px">
+        <input type="number" class="field-input sched-limit" data-day="${day}" value="${limitValue}" placeholder="No limit" min="0" style="width:100%;font-size:11px;padding:6px 8px">
+      </div>`;
+  }).join('');
+
+  const header = `
+    <div style="display:grid;grid-template-columns:90px 1fr 1fr 90px;gap:8px;padding:0 8px 2px;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">
+      <div>Day</div><div>Start</div><div>End</div><div>Limit (min)</div>
+    </div>`;
+
+  document.getElementById('schedule-editor-rows').innerHTML = header + rows;
+  openModal('schedule-editor-modal');
+}
+
+async function saveScheduleEditor() {
+  const p = PROFILES_ALL[scheduleEditorProfileIndex];
+  if (!p || !p.id) { showToast('No profile selected', 'var(--red)'); return; }
+
+  const schedule = {};
+  let hasError = false;
+
+  DAY_ORDER.forEach(day => {
+    const startEl = document.querySelector(`.sched-start[data-day="${day}"]`);
+    const endEl   = document.querySelector(`.sched-end[data-day="${day}"]`);
+    const limitEl = document.querySelector(`.sched-limit[data-day="${day}"]`);
+
+    const start = startEl.value || '00:00';
+    const end   = endEl.value || '23:59';
+    const limitRaw = limitEl.value.trim();
+    const limit = limitRaw === '' ? null : parseInt(limitRaw, 10);
+
+    if (limit !== null && (isNaN(limit) || limit < 0)) {
+      hasError = true;
+    }
+
+    schedule[day] = { start, end, daily_limit_minutes: limit };
+  });
+
+  if (hasError) {
+    showToast('Daily limit must be a positive number of minutes, or left blank', 'var(--yellow)');
+    return;
+  }
+
+  try {
+    await apiPatch(`/api/profiles/${p.id}`, { schedule });
+    closeModal('schedule-editor-modal');
+    showToast(`✅ Schedule updated for "${p.name}"`, 'var(--green)');
+    await loadDataFromServer();
+    renderProfileCards();
+    renderSmallProfileList('profile-list-ov', 5);
+  } catch (err) {
+    showToast(`Couldn't save schedule: ${err.message}`, 'var(--red)');
+  }
+}
+
+// ── Reassign a device to a different profile (called from the Devices table) ──
+async function reassignDevice(deviceId, newProfileId) {
+  try {
+    await apiPatch(`/api/devices/${deviceId}`, { profile_id: newProfileId || null });
+    showToast('Device reassigned', 'var(--cyan)');
+    await loadDataFromServer();
+    renderDevicesTable();
+    renderProfileCards();
+    renderSmallDeviceList('device-list-ov', 5);
+  } catch (err) {
+    showToast(`Reassignment failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+// ═══════════════════ DEVICE EDIT MODAL ═══════════════════
+
+async function openDeviceEdit(deviceId) {
+  // Fetch the latest data for this specific device from the backend
+  try {
+    const d = await apiGet(`/api/devices/${deviceId}`);
+
+    document.getElementById('edit-device-id').value   = d.id;
+    document.getElementById('edit-device-name').value  = d.name;
+    document.getElementById('edit-device-ip').value    = d.ip;
+    document.getElementById('edit-device-icon').value  = d.icon || '💻';
+
+    const typeEl = document.getElementById('edit-device-type');
+    [...typeEl.options].forEach(o => { o.selected = o.value === d.type; });
+
+    // Populate the profile dropdown with current selection pre-set
+    const profEl = document.getElementById('edit-device-profile');
+    profEl.innerHTML = `<option value="">— Unassigned —</option>` +
+      PROFILES_ALL.map(p =>
+        `<option value="${p.id}" ${d.profile_id === p.id ? 'selected' : ''}>${p.icon} ${p.name}</option>`
+      ).join('');
+
+    openModal('edit-device-modal');
+  } catch (err) {
+    showToast(`Could not load device: ${err.message}`, 'var(--red)');
+  }
+}
+
+async function saveDeviceEdit() {
+  const id      = document.getElementById('edit-device-id').value;
+  const name    = document.getElementById('edit-device-name').value.trim();
+  const ip      = document.getElementById('edit-device-ip').value.trim();
+  const type    = document.getElementById('edit-device-type').value;
+  const icon    = document.getElementById('edit-device-icon').value.trim() || '💻';
+  const profId  = document.getElementById('edit-device-profile').value || null;
+
+  if (!name || !ip) {
+    showToast('Name and IP address are required', 'var(--yellow)');
+    return;
+  }
+  try {
+    await apiPatch(`/api/devices/${id}`, { name, ip, type, icon, profile_id: profId });
+    closeModal('edit-device-modal');
+    showToast(`✅ "${name}" updated`, 'var(--green)');
+    await loadDataFromServer();
+    renderDevicesTable();
+    renderProfileCards();
+    renderSmallDeviceList('device-list-ov', 5);
+  } catch (err) {
+    showToast(`Save failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+async function deleteDeviceConfirm() {
+  const id   = document.getElementById('edit-device-id').value;
+  const name = document.getElementById('edit-device-name').value;
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    await apiDelete(`/api/devices/${id}`);
+    closeModal('edit-device-modal');
+    showToast(`🗑 "${name}" deleted`, 'var(--red)');
+    await loadDataFromServer();
+    renderDevicesTable();
+    renderProfileCards();
+    renderSmallDeviceList('device-list-ov', 5);
+  } catch (err) {
+    showToast(`Delete failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+// ═══════════════════ PROFILE EDIT MODAL ═══════════════════
+
+// Index of the profile currently open in the edit modal
+// (needed so "Edit Schedule" button can open the schedule editor for the right profile)
+let editingProfileIndex = null;
+
+function openProfileEdit(profileIndex) {
+  editingProfileIndex = profileIndex;
+  const p = PROFILES_ALL[profileIndex];
+  if (!p) return;
+
+  document.getElementById('edit-profile-id').value     = p.id;
+  document.getElementById('edit-profile-name').value   = p.name;
+  document.getElementById('edit-profile-icon').value   = p.icon || '👤';
+  document.getElementById('edit-profile-color').value  = p.color || '#00d4ff';
+  document.getElementById('edit-profile-pihole').value = p.pihole_group || '';
+  document.getElementById('new-blocked-domain').value  = '';
+  document.getElementById('blocked-domain-status').textContent = '';
+
+  // Load the blocklist for this profile from the backend
+  renderBlockedDomains([]);
+  apiGet(`/api/profiles/${p.id}/blocklist`).then(data => {
+    renderBlockedDomains(data.blocked_domains || []);
+    if (data.pihole_enabled && !data.pihole_synced) {
+      document.getElementById('blocked-domain-status').textContent =
+        '⚠ Pi-hole not connected — blocked sites saved locally and will sync when Pi-hole is available';
+    }
+  }).catch(() => {
+    renderBlockedDomains([]);
+  });
+
+  openModal('edit-profile-modal');
+}
+
+// ── Blocked domains rendering ──────────────────────────────────────
+
+function renderBlockedDomains(domains) {
+  const el = document.getElementById('blocked-domain-list');
+  if (!domains || domains.length === 0) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:8px 0">
+      No sites blocked yet — type a domain above and click + Block</div>`;
+    return;
+  }
+  const pid = document.getElementById('edit-profile-id').value;
+  el.innerHTML = domains.map(d => `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+        padding:6px 10px;background:var(--s2);border:1px solid var(--border);
+        border-radius:6px;gap:8px">
+      <span style="font-size:11px;color:var(--text);font-family:var(--mono)">${d}</span>
+      <button onclick="removeBlockedDomain('${pid}','${d}')"
+        style="font-size:10px;padding:2px 8px;border-radius:4px;cursor:pointer;
+               background:rgba(255,69,87,.1);border:1px solid rgba(255,69,87,.3);
+               color:var(--red)">✕</button>
+    </div>`).join('');
+}
+
+async function addBlockedDomain() {
+  const pid    = document.getElementById('edit-profile-id').value;
+  const raw    = document.getElementById('new-blocked-domain').value.trim();
+  const status = document.getElementById('blocked-domain-status');
+  if (!raw) return;
+  status.textContent = 'Adding…';
+  status.style.color = 'var(--muted)';
+  try {
+    const data = await apiPost(`/api/profiles/${pid}/blocklist`, { domain: raw });
+    document.getElementById('new-blocked-domain').value = '';
+    renderBlockedDomains(data.blocked_domains || []);
+    const ph = data.pihole_result;
+    if (ph && ph.ok) {
+      status.textContent = `✅ "${data.domain}" blocked — synced to Pi-hole`;
+      status.style.color = 'var(--green)';
+    } else if (ph && !ph.ok && ph.error && ph.error.includes('PIHOLE_ENABLED')) {
+      status.textContent = `✅ "${data.domain}" saved locally (Pi-hole not connected yet)`;
+      status.style.color = 'var(--cyan)';
+    } else if (ph && !ph.ok) {
+      status.textContent = `⚠ Saved locally, Pi-hole error: ${ph.error}`;
+      status.style.color = 'var(--yellow)';
+    }
+    setTimeout(() => { status.textContent = ''; }, 4000);
+  } catch(err) {
+    status.textContent = `Error: ${err.message}`;
+    status.style.color = 'var(--red)';
+  }
+}
+
+async function removeBlockedDomain(pid, domain) {
+  const status = document.getElementById('blocked-domain-status');
+  status.textContent = `Removing "${domain}"…`;
+  status.style.color = 'var(--muted)';
+  try {
+    const data = await apiDelete(`/api/profiles/${pid}/blocklist/${domain}`);
+    renderBlockedDomains(data.blocked_domains || []);
+    status.textContent = `✅ "${domain}" unblocked`;
+    status.style.color = 'var(--green)';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(err) {
+    status.textContent = `Error: ${err.message}`;
+    status.style.color = 'var(--red)';
+  }
+}
+
+async function saveProfileEdit() {
+  const id        = document.getElementById('edit-profile-id').value;
+  const name      = document.getElementById('edit-profile-name').value.trim();
+  const icon      = document.getElementById('edit-profile-icon').value.trim() || '👤';
+  const color     = document.getElementById('edit-profile-color').value.trim() || '#00d4ff';
+  const pihole    = document.getElementById('edit-profile-pihole').value.trim() || null;
+
+  if (!name) { showToast('Profile name is required', 'var(--yellow)'); return; }
+
+  try {
+    await apiPatch(`/api/profiles/${id}`, { name, icon, color, pihole_group: pihole });
+    closeModal('edit-profile-modal');
+    showToast(`✅ Profile "${name}" updated`, 'var(--green)');
+    await loadDataFromServer();
+    renderProfileCards();
+    renderSmallProfileList('profile-list-ov', 5);
+    populateProfileDropdown();
+  } catch (err) {
+    showToast(`Save failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+async function deleteProfileConfirm() {
+  const id   = document.getElementById('edit-profile-id').value;
+  const name = document.getElementById('edit-profile-name').value;
+  if (!confirm(`Delete profile "${name}"? Its devices will become Unassigned.`)) return;
+  try {
+    await apiDelete(`/api/profiles/${id}`);
+    closeModal('edit-profile-modal');
+    showToast(`🗑 Profile "${name}" deleted — devices unassigned`, 'var(--red)');
+    await loadDataFromServer();
+    renderProfileCards();
+    renderDevicesTable();
+    renderSmallProfileList('profile-list-ov', 5);
+    renderSmallDeviceList('device-list-ov', 5);
+    populateProfileDropdown();
+  } catch (err) {
+    showToast(`Delete failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+// Opens the schedule/daily-limits editor from within the profile edit modal
+function openScheduleEditorFromProfile() {
+  if (editingProfileIndex === null) return;
+  closeModal('edit-profile-modal');
+  openScheduleEditor(editingProfileIndex);
+}
+
+// ── Triggers a real network scan via arp-scan on the backend ──
+async function runNetworkScan() {
+  showToast('🔍 Scanning network…', 'var(--cyan)');
+  try {
+    const result = await apiPost('/api/scan');
+    showToast(`✅ Scan complete — ${result.newly_added.length} new device(s) found`, 'var(--green)');
+    await loadDataFromServer();
+    renderDevicesTable();
+    renderSmallDeviceList('device-list-ov', 5);
+  } catch (err) {
+    showToast(`Scan failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+async function triggerAutoRename() {
+  showToast('🏷 Auto-naming unknown devices — this takes about a minute…', 'var(--cyan)');
+  try {
+    const result = await apiPost('/api/devices/auto-rename', {});
+    if (result.renamed === 0) {
+      showToast('No unknown devices to rename — all devices already have names', 'var(--muted)');
+    } else {
+      showToast(`✅ Auto-named ${result.renamed} device(s)`, 'var(--green)');
+      await loadDataFromServer();
+      renderDevicesTable();
+      renderSmallDeviceList('device-list-ov', 5);
+    }
+  } catch (err) {
+    showToast(`Auto-rename failed: ${err.message}`, 'var(--red)');
+  }
+}
+
+function renderAccessLog() {
+  document.getElementById('access-log').innerHTML = ACCESS_LOG.map(e => `
+    <div class="tl-item">
+      <div class="tl-dot" style="background:${e.color};box-shadow:0 0 4px ${e.color}"></div>
+      <div class="tl-body"><div class="tl-title">${e.title}</div><div class="tl-meta"><span>${e.time}</span></div></div>
+    </div>`).join('');
+}
+
+function renderFWRules() {
+  const tbody = document.getElementById('fw-rules-tbody');
+  if (!tbody) return;
+  if (!FW_RULES.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;font-size:11px">Firewall rules require direct UFW/iptables integration — not yet connected</td></tr>';
+    return;
+  }
+  tbody.innerHTML = FW_RULES.map(r => `
+    <tr>
+      <td>${r.name}</td>
+      <td style="color:var(--muted)">${r.dir}</td>
+      <td class="mono">${r.proto}</td>
+      <td><span class="device-status online">Active</span></td>
+    </tr>`).join('');
+}
+
+function renderBlocklists() {
+  const tbody = document.getElementById('blocklist-tbody');
+  if (!tbody) return;
+  if (!BLOCKLISTS.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;font-size:11px">Pi-hole blocklists will appear here when Pi-hole is connected (set PIHOLE_ENABLED=true)</td></tr>';
+    return;
+  }
+  tbody.innerHTML = BLOCKLISTS.map(b => `
+    <tr>
+      <td>${b.name}</td>
+      <td class="mono">${b.domains}</td>
+      <td><span class="device-status ${b.active?'online':'offline'}">${b.active?'On':'Off'}</span></td>
+    </tr>`).join('');
+}
+
+function renderBlockedDomains() {
+  const tbody = document.getElementById('blocked-domains-tbody');
+  if (!tbody) return;
+  if (!BLOCKED_DOMAINS.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;font-size:11px">No blocked domains yet — connect Pi-hole to see DNS-level blocks</td></tr>';
+    return;
+  }
+  tbody.innerHTML = BLOCKED_DOMAINS.map(d => `
+    <tr>
+      <td class="mono" style="font-size:11px">${d.domain}</td>
+      <td><span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--s3);color:var(--muted)">${d.cat}</span></td>
+      <td class="mono">${d.count.toLocaleString()}</td>
+    </tr>`).join('');
+}
+
+function renderVLANs() {
+  const tbody = document.getElementById('vlan-tbody');
+  if (!tbody) return;
+  // Count devices per subnet from real scan data
+  const subnetsWithCounts = VLANS.map(v => {
+    const prefix = v.subnet.replace('/24','').replace('.0','.');
+    const count = DEVICES_ALL.filter(d => d.ip && d.ip.startsWith(prefix)).length;
+    return {...v, devices: count};
+  });
+  tbody.innerHTML = subnetsWithCounts.map(v => `
+    <tr>
+      <td class="mono" style="color:var(--cyan)">VLAN ${v.id}</td>
+      <td>${v.name}</td>
+      <td class="mono" style="font-size:11px">${v.subnet}</td>
+      <td>${v.devices}</td>
+    </tr>`).join('');
+}
+
+function renderWazuhEvents() {
+  const WAZUH_EVENTS = getWazuhEvents();
+  document.getElementById('wazuh-events-tbody').innerHTML = WAZUH_EVENTS.length
+    ? WAZUH_EVENTS.map(e => {
+        const lc = e.level>=12?'critical':e.level>=9?'high':e.level>=6?'medium':'low';
+        return `<tr>
+          <td class="mono" style="font-size:10px">${e.time}</td>
+          <td>${e.rule}</td>
+          <td><span class="alert-level lvl-${lc}">${e.level}</span></td>
+          <td class="mono" style="font-size:10px">${e.agent}</td>
+          <td><span class="mitre-tag">${e.mitre}</span></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No Wazuh events — set WAZUH_ENABLED=true on the server to see real alerts</td></tr>';
+}
+
+function renderMitreGrid() {
+  document.getElementById('mitre-grid').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+      ${MITRE_TACTICS.map(t=>`
+        <div style="padding:7px 8px;border-radius:5px;border:1px solid ${t.covered?t.color+'44':'var(--border)'};background:${t.covered?t.color+'11':'transparent'};cursor:pointer" onclick="showToast('${t.name}: ${t.covered?'Covered':'Not covered'}','${t.color}')">
+          <div style="font-family:var(--mono);font-size:8px;color:${t.covered?t.color:'var(--muted)'};">${t.id}</div>
+          <div style="font-size:9px;color:${t.covered?'var(--text)':'var(--muted)'};margin-top:2px;line-height:1.3">${t.name}</div>
+        </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:16px;font-size:10px;color:var(--muted)">
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:var(--green)"></div> Covered (${MITRE_TACTICS.filter(t=>t.covered).length})</div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:var(--border)"></div> Gap (${MITRE_TACTICS.filter(t=>!t.covered).length})</div>
+    </div>`;
+}
+
+function renderVulnTable() {
+  document.getElementById('vuln-tbody').innerHTML = VULN_DATA.map(v => `
+    <tr>
+      <td class="mono">${v.host}</td>
+      <td style="color:${v.crit>0?'var(--red)':'var(--muted)'}">${v.crit}</td>
+      <td style="color:${v.high>0?'var(--yellow)':'var(--muted)'}">${v.high}</td>
+      <td style="color:var(--muted)">${v.med}</td>
+      <td><span class="mono" style="color:${parseFloat(v.score)>=7?'var(--red)':parseFloat(v.score)>=4?'var(--yellow)':'var(--green)'}">${v.score}</span></td>
+    </tr>`).join('');
+}
+
+function renderConnections() {
+  const tbody = document.getElementById('conns-tbody');
+  if (!tbody) return;
+  if (CONNS.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;font-size:11px">No connection data — requires a packet capture tool (ntopng or Zeek) to be integrated</td></tr>';
+    return;
+  }
+  tbody.innerHTML = CONNS.map(c => `
+    <tr>
+      <td style="font-size:11px">${c.src}</td>
+      <td class="mono" style="font-size:10px">${c.dst}</td>
+      <td><span style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--s3);color:var(--muted)">${c.proto}</span></td>
+      <td class="mono" style="color:var(--cyan)">${c.mbps}</td>
+    </tr>`).join('');
+}
+
+function renderAlertHistory() {
+  const el = document.getElementById('alert-history');
+  if (!el) return;
+  const alerts = LIVE.wazuhEvents && LIVE.wazuhEvents.length ? LIVE.wazuhEvents : ALERT_HISTORY;
+  if (alerts.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:11px">No alerts — connect Wazuh (set WAZUH_ENABLED=true) to see real security events</div>';
+    return;
+  }
+  el.innerHTML = alerts.map(a => {
+    const lvl = typeof a.level === 'number'
+      ? (a.level>=12?'critical':a.level>=9?'high':a.level>=6?'medium':'low')
+      : (a.level||'info');
+    const color = lvl==='critical'||lvl==='high' ? '#ff4557' : lvl==='medium' ? '#ffc740' : '#00d4ff';
+    return `<div class="tl-item">
+      <div class="tl-dot" style="background:${color};box-shadow:0 0 4px ${color}"></div>
+      <div class="tl-body">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="tl-title">${a.rule||a.title||''}</div>
+          <span class="alert-level lvl-${lvl}">${lvl.toUpperCase()}</span>
+        </div>
+        <div class="tl-meta"><span>${a.agent||''}</span><span>${a.time||''}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTopTalkers() {
+  const rows = getBWData().slice(0,5).map(b => {
+    const dl = (b.gb * 0.7).toFixed(1), ul = (b.gb * 0.3).toFixed(1);
+    const bar = `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:4px;background:var(--s3);border-radius:2px;overflow:hidden"><div style="height:100%;width:${b.pct}%;background:${b.color};border-radius:2px"></div></div><span class="mono" style="font-size:10px;color:var(--muted);width:32px">${b.pct}%</span></div>`;
+    return `<tr><td>${b.name}</td><td class="mono">${dl} GB</td><td class="mono">${ul} GB</td><td class="mono" style="color:#fff">${b.gb} GB</td><td>${bar}</td><td style="color:var(--green);font-size:11px">↑ —</td></tr>`;
+  });
+  document.getElementById('top-talkers-tbody').innerHTML = rows.join('');
+}
+
+function renderDeviceTypeLegend() {
+  const DEVICE_TYPES = getDeviceTypes();
+  document.getElementById('device-type-legend').innerHTML = DEVICE_TYPES.map(t => `
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:7px;height:7px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
+      <div style="flex:1;font-size:11px;color:var(--text)">${t.type}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">${t.count}</div>
+    </div>`).join('');
+}
+
+function renderProtoLegend() {
+  const el = document.getElementById('proto-legend');
+  if (!el) return;
+  if (PROTO_DATA.length === 0) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:8px 0">Requires deep packet inspection — not available without ntopng integration</div>';
+    return;
+  }
+  el.innerHTML = PROTO_DATA.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <div style="width:7px;height:7px;border-radius:50%;background:${p.color};flex-shrink:0"></div>
+      <div style="flex:1;font-size:11px;color:var(--text)">${p.name}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">${p.pct}%</div>
+    </div>`).join('');
+}
+
+function renderIntegrations() {
+  document.getElementById('integrations-list').innerHTML = INTEGRATIONS_DATA.map((item,i) => `
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">${item.name}</div>
+        <div class="toggle-desc">${item.desc} · <span style="font-family:var(--mono);font-size:10px;color:var(--cyan)">${item.url}</span></div>
+      </div>
+      <div class="toggle-switch ${item.on?'on':'off'}" id="integ-${i}" onclick="flipToggle('integ-${i}','${item.name}')">
+        <div class="toggle-knob"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderNotifications() {
+  document.getElementById('notifications-list').innerHTML = NOTIF_DATA.map((item,i) => `
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-name">${item.name}</div>
+        <div class="toggle-desc">${item.desc}</div>
+      </div>
+      <div class="toggle-switch ${item.on?'on':'off'}" id="notif-${i}" onclick="flipToggle('notif-${i}','${item.name}')">
+        <div class="toggle-knob"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderNetworkMap() {
+  const area = document.getElementById('map-area');
+  if (!area) return;
+
+  // Build nodes from real scanned devices
+  // Always include Internet and the server itself at the top
+  const iconFor = d => {
+    const t = (d.type||'').toLowerCase(), n = (d.name||'').toLowerCase();
+    if (n.includes('router') || n.includes('gateway') || n.includes('opnsense') || n.includes('firewall')) return {icon:'🔥',color:'#ff8c00'};
+    if (n.includes('pi-hole') || n.includes('pihole') || n.includes('dns')) return {icon:'🍓',color:'#e87a00'};
+    if (n.includes('server') || t==='server') return {icon:'🗄️',color:'#00d4ff'};
+    if (t==='desktop')  return {icon:'🖥️',color:'#00e87a'};
+    if (t==='laptop')   return {icon:'💻',color:'#00e87a'};
+    if (t==='mobile' || t==='tablet') return {icon:'📱',color:'#a855f7'};
+    if (t==='tv')       return {icon:'📺',color:'#a855f7'};
+    if (t==='console')  return {icon:'🎮',color:'#3b82f6'};
+    if (t==='iot')      return {icon:'🌡️',color:'#ffc740'};
+    return {icon:'💻',color:'#5a6580'};
+  };
+
+  // Fixed infrastructure nodes
+  const infraNodes = [
+    {id:'inet', label:'Internet', icon:'🌐', x:50, y:8,  color:'#00e87a'},
+    {id:'gw',   label:'Router',   icon:'🔀', x:50, y:28, color:'#00d4ff'},
+  ];
+
+  // Device nodes — spread in a row at the bottom, max 10 shown
+  const online = DEVICES_ALL.filter(d => d.status === 'online').slice(0, 10);
+  const spacing = online.length > 1 ? 80 / (online.length - 1) : 0;
+  const deviceNodes = online.map((d, i) => {
+    const {icon, color} = iconFor(d);
+    const x = online.length === 1 ? 50 : 10 + i * spacing;
+    return {id:`dev-${i}`, label: d.name || d.ip, icon, x, y: 70, color};
+  });
+
+  const nodes = [...infraNodes, ...deviceNodes];
+  const edges = [
+    ['inet','gw'],
+    ...deviceNodes.map(d => ['gw', d.id])
+  ];
+
+  area.innerHTML = '';
+
+  // SVG lines
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+  edges.forEach(([a,b]) => {
+    const na = nodes.find(n=>n.id===a), nb = nodes.find(n=>n.id===b);
+    if (!na || !nb) return;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',na.x+'%'); line.setAttribute('y1',na.y+'%');
+    line.setAttribute('x2',nb.x+'%'); line.setAttribute('y2',nb.y+'%');
+    line.setAttribute('stroke','#1e2535'); line.setAttribute('stroke-width','1.5');
+    svg.appendChild(line);
+  });
+  area.appendChild(svg);
+
+  // Nodes
+  nodes.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'map-node';
+    el.style.cssText = `left:${n.x}%;top:${n.y}%;transform:translate(-50%,-50%)`;
+    el.innerHTML = `<div class="map-node-icon" style="background:${n.color}22;border-color:${n.color}55">${n.icon}</div><div class="map-node-label">${n.label}</div>`;
+    el.onclick = () => showToast(`${n.label} — Online`, n.color);
+    area.appendChild(el);
+    const pulse = document.createElement('div');
+    pulse.className = 'map-pulse';
+    pulse.style.cssText = `left:${n.x}%;top:${n.y}%;width:36px;height:36px;margin-left:-18px;margin-top:-18px;border:1px solid ${n.color}66`;
+    area.appendChild(pulse);
+  });
+
+  if (DEVICES_ALL.length === 0) {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--muted);font-size:12px;text-align:center';
+    msg.textContent = 'No devices yet — click Scan Network on the Devices page';
+    area.appendChild(msg);
+  }
+}
+
+// ═══════════════════════ CHARTS ═══════════════════════
+// initTrafficData now populates from /api/traffic (vnstat)
+// falling back to zero arrays if vnstat isn't running yet.
+// The chart is rebuilt after boot once real data arrives.
+async function initTrafficData() {
+  const now = new Date();
+  for (let i=23; i>=0; i--) {
+    const h = new Date(now.getTime()-i*3600000);
+    trafficData.labels.push(h.getHours().toString().padStart(2,'0')+':00');
+    trafficData.rx.push(0);   // real values loaded after boot
+    trafficData.tx.push(0);
+  }
+}
+
+const CHART_DEFAULTS = {
+  tooltip:{backgroundColor:'#12151f',borderColor:'#1e2535',borderWidth:1,titleColor:'#5a6580',bodyColor:'#dde4f0',titleFont:{family:'JetBrains Mono',size:10},bodyFont:{family:'JetBrains Mono',size:11}},
+  scaleTick:{color:'#5a6580',font:{family:'JetBrains Mono',size:9}},
+  grid:{color:'#1e2535'}
+};
+
+function mkChart(id, cfg) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (chartsBuilt[id]) { chartsBuilt[id].destroy(); }
+  const c = new Chart(el.getContext('2d'), cfg);
+  chartsBuilt[id] = c;
+  return c;
+}
+
+function buildOverviewCharts() {
+  const td = LIVE.traffic.labels && LIVE.traffic.labels.length ? LIVE.traffic : trafficData;
+  trafficChart = mkChart('traffic-chart', {
+    type:'line', data:{labels:td.labels, datasets:[
+      {label:'Download',data:td.rx,borderColor:'#00e87a',backgroundColor:'rgba(0,232,122,.07)',fill:true,tension:.4,pointRadius:0,borderWidth:1.5},
+      {label:'Upload',  data:td.tx,borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.05)',fill:true,tension:.4,pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip},
+      scales:{x:{ticks:{...CHART_DEFAULTS.scaleTick,maxTicksLimit:8},grid:CHART_DEFAULTS.grid},
+              y:{ticks:{...CHART_DEFAULTS.scaleTick,callback:v=>v+' M'},grid:CHART_DEFAULTS.grid}}}
+  });
+  const BWD = getBWData();
+  const isPihole = BWD.some(b => b.gb && b.gb.includes('q'));
+  donutChart = mkChart('donut-chart', {
+    type:'doughnut',
+    data:{
+      labels: BWD.map(b=>b.name),
+      datasets:[{
+        data: BWD.map(b=>b.pct),
+        backgroundColor: BWD.map(b=>b.color),
+        borderWidth:2, borderColor:'#07080c'
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'70%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{...CHART_DEFAULTS.tooltip, callbacks:{
+          label: ctx => isPihole
+            ? ` ${ctx.parsed}%  (${BWD[ctx.dataIndex]?.gb || '—'} DNS queries)`
+            : ` ${ctx.parsed}%`
+        }}
+      }
+    }
+  });
+  // Update donut center with real bandwidth from vnstat
+  const dtv = document.getElementById('donut-tb-val');
+  if (dtv) dtv.textContent = bwDisplay;
+}
+
+function buildPageCharts(page) {
+  setTimeout(() => {
+    if (page==='overview') buildOverviewCharts();
+    if (page==='devices') {
+      const _bwd=getBWData();
+      mkChart('devices-bar-chart',{type:'bar',data:{labels:_bwd.map(b=>b.name),datasets:[{label:'GB',data:_bwd.map(b=>+b.gb||0),backgroundColor:_bwd.map(b=>b.color+'bb'),borderColor:_bwd.map(b=>b.color),borderWidth:1,borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid},y:{ticks:{...CHART_DEFAULTS.scaleTick,callback:v=>v+' GB'},grid:CHART_DEFAULTS.grid}}}});
+      const _dt=getDeviceTypes();
+      mkChart('device-type-chart',{type:'doughnut',data:{labels:_dt.map(t=>t.type),datasets:[{data:_dt.map(t=>t.count),backgroundColor:_dt.map(t=>t.color),borderWidth:2,borderColor:'#07080c'}]},options:{responsive:true,cutout:'68%',plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip}}});
+    }
+    if (page==='users') {
+      const schedLabels=PROFILES_ALL.map(p=>p.name);
+      const schedData = PROFILES_ALL.map(p => p.minutes_used_today || 0);
+      mkChart('schedule-chart',{type:'bar',data:{labels:schedLabels,datasets:[{label:'Minutes active today',data:schedData,backgroundColor:PROFILES_ALL.map(p=>p.status==='allowed'?p.color+'aa':p.color+'33'),borderColor:PROFILES_ALL.map(p=>p.color),borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{ticks:{...CHART_DEFAULTS.scaleTick,callback:v=>v+' min'},grid:CHART_DEFAULTS.grid},y:{ticks:CHART_DEFAULTS.scaleTick,grid:{display:false}}}}});
+    }
+    if (page==='access') {
+      const _td2 = LIVE.traffic.labels && LIVE.traffic.labels.length ? LIVE.traffic : trafficData;
+      const dnsLabels   = [..._td2.labels];
+      // DNS blocked data: if Pi-hole isn't connected zeros are shown honestly
+      const dnsBlocked  = dnsLabels.map(()=>0);
+      const dnsAllowed  = dnsLabels.map(()=>0);
+      mkChart('dns-chart',{type:'bar',data:{labels:dnsLabels,datasets:[{label:'Allowed',data:dnsAllowed,backgroundColor:'rgba(0,232,122,.3)',borderColor:'#00e87a',borderWidth:1,borderRadius:2},{label:'Blocked',data:dnsBlocked,backgroundColor:'rgba(255,69,87,.3)',borderColor:'#ff4557',borderWidth:1,borderRadius:2}]},options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#5a6580',font:{family:'JetBrains Mono',size:10}}},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{stacked:true,ticks:{...CHART_DEFAULTS.scaleTick,maxTicksLimit:8},grid:CHART_DEFAULTS.grid},y:{stacked:true,ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid}}}});
+    }
+    if (page==='map') {
+      mkChart('proto-chart',{type:'doughnut',data:{labels:PROTO_DATA.map(p=>p.name),datasets:[{data:PROTO_DATA.map(p=>p.pct),backgroundColor:PROTO_DATA.map(p=>p.color),borderWidth:2,borderColor:'#07080c'}]},options:{responsive:true,cutout:'65%',plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip}}});
+      const portLabels=['eth0','eth1','wlan0','vlan20','vlan30'];
+      mkChart('port-chart',{type:'bar',data:{labels:portLabels,datasets:[{label:'Rx Mbps',data:SCAN_SUBNETS ? [0] : [0],backgroundColor:'rgba(0,232,122,.3)',borderColor:'#00e87a',borderWidth:1,borderRadius:3},{label:'Tx Mbps',data:[0],backgroundColor:'rgba(0,212,255,.3)',borderColor:'#00d4ff',borderWidth:1,borderRadius:3}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{labels:{color:'#5a6580',font:{family:'JetBrains Mono',size:10}}},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{ticks:{...CHART_DEFAULTS.scaleTick,callback:v=>v+' M'},grid:CHART_DEFAULTS.grid},y:{ticks:CHART_DEFAULTS.scaleTick,grid:{display:false}}}}});
+    }
+    if (page==='security') {
+      const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      mkChart('alert-vol-chart',{type:'bar',data:{labels:days,datasets:[{label:'Critical',data:(LIVE.alertCounts7d.length ? LIVE.alertCounts7d.map(d=>d.critical) : days.map(()=>0)),backgroundColor:'rgba(255,69,87,.4)',borderColor:'#ff4557',borderWidth:1,borderRadius:2},{label:'High',data:(LIVE.alertCounts7d.length ? LIVE.alertCounts7d.map(d=>d.high) : days.map(()=>0)),backgroundColor:'rgba(255,199,64,.3)',borderColor:'#ffc740',borderWidth:1,borderRadius:2},{label:'Medium',data:(LIVE.alertCounts7d.length ? LIVE.alertCounts7d.map(d=>d.medium) : days.map(()=>0)),backgroundColor:'rgba(0,212,255,.2)',borderColor:'#00d4ff',borderWidth:1,borderRadius:2}]},options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#5a6580',font:{family:'JetBrains Mono',size:10}}},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{stacked:true,ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid},y:{stacked:true,ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid}}}});
+      // Build agents chart from real Wazuh event data
+      const agentNames = LIVE.wazuhEvents && LIVE.wazuhEvents.length
+        ? [...new Set(LIVE.wazuhEvents.map(e => e.agent).filter(Boolean))].slice(0,6)
+        : ['No Wazuh data yet'];
+      const agentColors = ['#00d4ffbb','#ff8c00bb','#00e87abb','#e87a00bb','#a855f7bb','#ffc740bb'];
+      mkChart('agents-chart',{type:'bar',data:{labels:agentNames,datasets:[{label:'Alerts',data:agentNames.map(n => LIVE.wazuhEvents.filter(e=>e.agent===n).length || 0),backgroundColor:agentNames.map((_,i)=>agentColors[i%agentColors.length]),borderRadius:4}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid},y:{ticks:{...CHART_DEFAULTS.scaleTick,font:{family:'JetBrains Mono',size:9}},grid:{display:false}}}}});
+    }
+    if (page==='reports') {
+      const weekDays=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      mkChart('weekly-bw-chart',{type:'line',data:{labels:weekDays,datasets:[{label:'Download TB',data:weekDays.map(()=>0),borderColor:'#00e87a',backgroundColor:'rgba(0,232,122,.07)',fill:true,tension:.4,pointRadius:3,borderWidth:2},{label:'Upload TB',data:weekDays.map(()=>0),borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.05)',fill:true,tension:.4,pointRadius:3,borderWidth:2}]},options:{responsive:true,plugins:{legend:{labels:{color:'#5a6580',font:{family:'JetBrains Mono',size:10}}},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid},y:{ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid}}}});
+      mkChart('monthly-alerts-chart',{type:'bar',data:{labels:Array.from({length:30},(_,i)=>`${i+1}`),datasets:[{label:'Alerts',data:Array.from({length:30},()=>0),backgroundColor:'rgba(255,199,64,.3)',borderColor:'#ffc740',borderWidth:1,borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:CHART_DEFAULTS.tooltip},scales:{x:{ticks:{...CHART_DEFAULTS.scaleTick,maxTicksLimit:10},grid:CHART_DEFAULTS.grid},y:{ticks:CHART_DEFAULTS.scaleTick,grid:CHART_DEFAULTS.grid}}}});
+    }
+  }, 60);
+}
+
+// ═══════════════════════ LIVE TICKS ═══════════════════════
+function tickTraffic() {
+  if (!trafficChart) return;
+  const last = trafficData.rx.length-1;
+  // Refresh chart from latest vnstat data when available
+  if (LIVE.traffic && LIVE.traffic.rx && LIVE.traffic.rx.length) {
+    trafficData.rx = LIVE.traffic.rx;
+    trafficData.tx = LIVE.traffic.tx;
+    trafficData.labels = LIVE.traffic.labels;
+  }
+  // TX chart data updated from LIVE.traffic in tickTraffic
+  trafficChart.data.datasets[0].data = [...trafficData.rx];
+  trafficChart.data.datasets[1].data = [...trafficData.tx];
+  trafficChart.update('none');
+}
+
+function formatUptime(s) {
+  const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);
+  return `${d}d ${h}h ${m}m`;
+}
+function tickUptime() {
+  uptimeSeconds++;
+  const str = formatUptime(uptimeSeconds);
+  ['uptime-display','sidebar-uptime'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=str;});
+}
+function tickCountdown() {
+  countdown--;
+  document.getElementById('countdown').textContent = countdown+'s';
+  if (countdown<=0) {
+    countdown=10;
+    tickTraffic();
+    const el=document.getElementById('stat-online');
+    if(el) el.textContent = LIVE.onlineCount || '—';
+  }
+}
+
+// ═══════════════════════ ACTIONS ═══════════════════════
+function toggleControl(i) {
+  ctrlStates[i] = !ctrlStates[i];
+  showToast(`${CONTROLS[i].label} — ${ctrlStates[i]?'Activated':'Deactivated'}`, ctrlStates[i]?CONTROLS[i].color:'#5a6580');
+  renderControls();
+}
+
+function triggerAlert() {
+  alertsActive = !alertsActive;
+  renderAlerts();
+  showToast(alertsActive?'⚠️  Security alert detected':'✅  Alerts cleared', alertsActive?'var(--red)':'var(--green)');
+}
+
+function flipToggle(id, name) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isOn = el.classList.contains('on');
+  el.classList.toggle('on', !isOn);
+  el.classList.toggle('off', isOn);
+  showToast(`${name} — ${isOn?'Disabled':'Enabled'}`, isOn?'#5a6580':'var(--green)');
+}
+
+function showToast(msg, color) {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<div class="toast-dot" style="background:${color};box-shadow:0 0 6px ${color}"></div> ${msg}`;
+  container.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .4s';setTimeout(()=>el.remove(),400);},3000);
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e=>{ if(e.target===o) o.classList.remove('open'); }));
+
+// ═══════════════════════ BOOT ═══════════════════════
+// (initTrafficData is called inside bootDashboard)
+async function bootDashboard() {
+  // Load base data + live chart data in parallel
+  await Promise.all([loadDataFromServer(), initTrafficData(), loadLiveChartData()]);
+
+  // Render everything that doesn't need a sized canvas first
+  renderSmallDeviceList('device-list-ov', 5);
+  renderSmallProfileList('profile-list-ov', 5);
+  renderNetStatus();
+  renderBWList();
+  renderControls();
+  renderAlerts();
+
+  // Pre-render other pages
+  renderDevicesTable();
+  renderDeviceTypeLegend();
+  renderProfileCards();
+  renderAccessLog();
+  renderFWRules();
+  renderBlocklists();
+  renderBlockedDomains();
+  renderVLANs();
+  renderNetworkMap();
+  renderWazuhEvents();
+  renderMitreGrid();
+  renderVulnTable();
+  renderConnections();
+  renderProtoLegend();
+  renderAlertHistory();
+  renderTopTalkers();
+  renderIntegrations();
+  renderNotifications();
+  populateProfileDropdown();
+
+  // Build overview charts AFTER two animation frames so the browser
+  // has fully calculated and painted the flex layout — without this
+  // delay, Chart.js reads a canvas clientHeight of 0 because the
+  // flex distribution hasn't happened yet when the script runs.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      buildOverviewCharts();
+      // One additional resize pass 200ms later covers any remaining
+      // sub-pixel flex settling on slow devices
+      setTimeout(() => {
+        if (trafficChart) trafficChart.resize();
+        if (donutChart)   donutChart.resize();
+      }, 200);
+    });
+  });
+
+  setTimeout(() => {
+    showToast(
+      apiOffline
+        ? `🔴  Backend offline at ${API_BASE} — start netwatch_api.py to see live data`
+        : '🟢  NET-WATCH connected to backend — live data loaded',
+      apiOffline ? 'var(--red)' : 'var(--green)'
+    );
+  }, 600);
+}
+
+bootDashboard(); // auth disabled
+
+setInterval(tickCountdown, 1000);
+setInterval(tickUptime,    1000);
+setInterval(tickTraffic,   3000);
+
+// Poll every 10 seconds — device/profile status, alerts, usage budgets
+setInterval(async () => {
+  const ok = await loadDataFromServer();
+  if (ok) {
+    renderDevicesTable();
+    renderProfileCards();
+    renderSmallDeviceList('device-list-ov', 5);
+    renderSmallProfileList('profile-list-ov', 5);
+    renderAlerts();
+    renderNetStatus();
+    renderNetworkMap(); // update topology with latest device list
+  }
+}, 10000);
+
+// Refresh chart data (traffic, bandwidth, wazuh) every 60s
+// — vnstat updates once per hour, Wazuh events update continuously
+setInterval(async () => {
+  await loadLiveChartData();
+  // Refresh charts that display this data live
+  buildOverviewCharts();
+  renderBWList();
+  renderAlerts();
+  renderWazuhEvents();
+}, 60000);
+</script>
+</body>
+</html>
