@@ -1,0 +1,2096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NET-WATCH — Complete Build Guide</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg:       #07080c;
+  --s1:       #0d0e14;
+  --s2:       #12141c;
+  --s3:       #1a1d28;
+  --border:   #1e2235;
+  --text:     #c8ccd8;
+  --muted:    #5a6580;
+  --cyan:     #00d4ff;
+  --green:    #00e87a;
+  --yellow:   #ffc740;
+  --red:      #ff4557;
+  --purple:   #a855f7;
+  --mono:     'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 15px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  line-height: 1.7;
+  padding-bottom: 120px;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,8,12,.97);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 52px;
+}
+.topbar-brand { font-size: 13px; font-weight: 700; color: var(--cyan); letter-spacing: .12em; }
+.topbar-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.progress-wrap { display: flex; align-items: center; gap: 12px; }
+.progress-bar-outer { width: 180px; height: 6px; background: var(--s3); border-radius: 3px; }
+.progress-bar-inner { height: 6px; background: linear-gradient(90deg,var(--cyan),var(--green)); border-radius: 3px; transition: width .4s ease; }
+.progress-label { font-size: 10px; color: var(--muted); }
+
+/* ── LAYOUT ── */
+.container { max-width: 860px; margin: 0 auto; padding: 0 20px 0; }
+
+/* ── HERO ── */
+.hero { padding: 48px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+.hero-eyebrow { font-size: 10px; color: var(--cyan); letter-spacing: .2em; text-transform: uppercase; margin-bottom: 12px; }
+.hero-title { font-size: 28px; font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 14px; }
+.hero-title span { color: var(--cyan); }
+.hero-desc { font-size: 12px; color: var(--muted); max-width: 620px; line-height: 1.8; }
+.hero-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.badge { font-size: 10px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+.badge.cyan   { border-color: var(--cyan)44; color: var(--cyan); background: var(--cyan)0d; }
+.badge.green  { border-color: var(--green)44; color: var(--green); background: var(--green)0d; }
+.badge.yellow { border-color: var(--yellow)44; color: var(--yellow); background: var(--yellow)0d; }
+
+/* ── ORDER NOTE ── */
+.order-note {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px 24px; margin-bottom: 40px;
+  border-left: 3px solid var(--cyan);
+}
+.order-note h3 { font-size: 11px; color: var(--cyan); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+.order-note p  { font-size: 12px; color: var(--muted); line-height: 1.8; }
+.order-note p + p { margin-top: 8px; }
+
+/* ── SECTION ── */
+.section { margin-bottom: 60px; }
+.section-header {
+  display: flex; align-items: baseline; gap: 14px;
+  padding-bottom: 14px; margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.section-num {
+  font-size: 10px; font-weight: 700; color: var(--cyan);
+  background: var(--cyan)15; border: 1px solid var(--cyan)33;
+  border-radius: 4px; padding: 2px 7px; letter-spacing: .08em;
+  white-space: nowrap;
+}
+.section-header h2 { font-size: 16px; font-weight: 600; color: #fff; }
+.section-header .new-badge {
+  font-size: 9px; color: var(--green); background: var(--green)15;
+  border: 1px solid var(--green)33; border-radius: 3px; padding: 2px 6px;
+}
+
+/* ── STEPS ── */
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step {
+  display: flex; gap: 0;
+  padding-left: 0;
+}
+.step-line {
+  display: flex; flex-direction: column; align-items: center;
+  width: 36px; flex-shrink: 0;
+}
+.step-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--s2); border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--cyan);
+  flex-shrink: 0;
+}
+.step-connector {
+  width: 1px; background: var(--border);
+  flex: 1; margin: 4px 0; min-height: 12px;
+}
+.step-body {
+  flex: 1; padding: 2px 0 24px 16px;
+}
+.step-body h4 { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px; line-height: 1.4; }
+.step-body p  { font-size: 12px; color: var(--muted); line-height: 1.85; margin-bottom: 6px; }
+.step-body p:last-child { margin-bottom: 0; }
+.step-body strong { color: var(--text); }
+
+/* ── CODE BLOCKS ── */
+.code-block {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; margin: 14px 0 20px;
+}
+.code-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 14px; background: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+.code-lang { font-size: 10px; color: var(--cyan); letter-spacing: .1em; text-transform: uppercase; }
+.code-file { font-size: 10px; color: var(--muted); }
+.code-block pre {
+  padding: 16px; overflow-x: auto; font-size: 12px;
+  line-height: 1.7; color: var(--text);
+  -webkit-overflow-scrolling: touch;
+}
+.c  { color: var(--muted); }
+.s  { color: var(--green); }
+.k  { color: var(--cyan); }
+.kw { color: var(--purple); }
+.v  { color: var(--yellow); }
+
+/* ── CALLOUTS ── */
+.callout {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0;
+  border-left: 3px solid transparent; font-size: 12px; line-height: 1.8;
+}
+.callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.callout.tip    { background: var(--green)0a; border-color: var(--green); }
+.callout.info   { background: var(--cyan)0a;  border-color: var(--cyan);  }
+.callout.warn   { background: var(--yellow)0a;border-color: var(--yellow);}
+.callout.danger { background: var(--red)0a;   border-color: var(--red);   }
+.callout.write  { background: var(--purple)0a;border-color: var(--purple);}
+
+/* ── SNAPSHOT CALLOUT ── */
+.callout.snap {
+  background: linear-gradient(135deg, #00d4ff0d, #00e87a0d);
+  border-color: var(--cyan);
+  border: 1px solid var(--cyan)44;
+  border-left: 3px solid var(--cyan);
+  border-radius: 8px;
+  position: relative;
+}
+.snap-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 9px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--cyan);
+  background: var(--cyan)15; border: 1px solid var(--cyan)33;
+  border-radius: 4px; padding: 2px 8px; margin-bottom: 10px;
+}
+.snap-title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+.snap-body  { font-size: 12px; color: var(--muted); line-height: 1.85; }
+.snap-body strong { color: var(--text); }
+.snap-body .snap-list { list-style: none; margin: 10px 0; display: flex; flex-direction: column; gap: 5px; }
+.snap-body .snap-list li::before { content: "→ "; color: var(--cyan); }
+.snap-body .snap-list li { font-size: 12px; color: var(--muted); }
+.snap-caption {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  font-size: 11px; color: var(--text); line-height: 1.7;
+}
+.snap-caption span { color: var(--muted); display: block; font-size: 10px; margin-bottom: 3px; letter-spacing: .06em; text-transform: uppercase; }
+.snap-platforms {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+.snap-platform {
+  font-size: 10px; padding: 3px 10px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--muted);
+}
+.snap-platform.gh  { border-color: #ffffff33; color: #fff; background: #ffffff0a; }
+.snap-platform.li  { border-color: #0a66c244; color: #5ba3d9; background: #0a66c20a; }
+.callout b { color: var(--text); }
+code {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--s3); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 5px; color: var(--cyan);
+}
+
+/* ── CHECKLIST ── */
+.checklist { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
+.check-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 14px; background: var(--s1); border: 1px solid var(--border);
+  border-radius: 7px; cursor: pointer; transition: border-color .15s;
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.check-item:hover { border-color: var(--border); }
+.check-item.done  { border-color: var(--green)44; background: var(--green)06; }
+.check-box {
+  width: 18px; height: 18px; border-radius: 4px;
+  border: 1.5px solid var(--muted); flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s; font-size: 11px;
+}
+.check-item.done .check-box { background: var(--green); border-color: var(--green); color: #000; }
+.check-label { font-size: 12px; color: var(--text); line-height: 1.6; flex: 1; }
+.check-item.done .check-label { color: var(--muted); text-decoration: line-through; }
+
+/* ── FILES GRID ── */
+.files-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 10px; margin: 16px 0; }
+.file-card {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px;
+}
+.file-card .fname { font-size: 12px; color: var(--cyan); margin-bottom: 4px; word-break: break-all; }
+.file-card .fdesc { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+/* ── TERM GRID (glossary) ── */
+.term-grid { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+.term-item {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 7px;
+  padding: 12px 16px; display: flex; gap: 12px; align-items: flex-start;
+}
+.term-q { font-size: 9px; color: var(--cyan); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px; }
+.term-word { font-size: 12px; color: #fff; font-weight: 600; }
+.term-def  { font-size: 12px; color: var(--muted); line-height: 1.7; flex: 1; }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(7,8,12,.97); backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; padding: 10px 16px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 100;
+}
+.nav-btn {
+  flex: 1; padding: 10px 8px; border-radius: 7px;
+  background: var(--s2); border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+  cursor: pointer; transition: all .15s; text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-btn:hover, .nav-btn:active { border-color: var(--cyan); color: var(--cyan); }
+
+/* ── TOC ── */
+.toc { background: var(--s1); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 40px; }
+.toc-title { font-size: 10px; color: var(--cyan); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 14px; }
+.toc-list  { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.toc-list a {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--muted); font-size: 12px;
+  padding: 8px 10px; border-radius: 6px; transition: all .12s;
+  min-height: 40px;
+}
+.toc-list a:hover { background: var(--s2); color: var(--text); }
+.toc-num {
+  font-size: 9px; color: var(--cyan); background: var(--cyan)12;
+  border: 1px solid var(--cyan)25; border-radius: 3px;
+  padding: 1px 6px; letter-spacing: .06em; flex-shrink: 0;
+}
+.toc-new { font-size: 9px; color: var(--green); background: var(--green)12; border: 1px solid var(--green)25; border-radius: 3px; padding: 1px 6px; margin-left: auto; }
+
+/* ── DIVIDER ── */
+hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .hero-title { font-size: 20px; }
+  .code-block pre { font-size: 11px; }
+  .files-grid { grid-template-columns: 1fr; }
+  .progress-bar-outer { width: 100px; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-brand">// NET-WATCH</div>
+    <div class="topbar-sub">Complete Build Guide</div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="pbar" style="width:0%"></div></div>
+    <div class="progress-label" id="plabel">0 / 0 done</div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-eyebrow">// homelab build guide — v3</div>
+  <div class="hero-title">NET-WATCH — <span>From Zero to a</span><br>Working Dashboard</div>
+  <div class="hero-desc">
+    Every step written as if you've never done this before. Every command explained.
+    Every term defined the first time it appears. Tap any checkbox to track your progress —
+    this guide saves your place automatically.
+  </div>
+  <div class="hero-badges">
+    <span class="badge cyan">📱 Works on phone</span>
+    <span class="badge cyan">💻 Works on tablet</span>
+    <span class="badge green">✓ All commands tested</span>
+    <span class="badge yellow">⚡ No prior experience needed</span>
+  </div>
+</div>
+
+<!-- ORDER NOTE -->
+<div class="order-note">
+  <h3>// Before you start — read this</h3>
+  <p>This guide installs NET-WATCH as a real working dashboard on your Ubuntu Server laptop.
+  You can do this <strong>before</strong> finishing your network hardening and Pi-hole setup —
+  in fact it's better to, because the dashboard gives you a live map of every device
+  while you're doing that work.</p>
+  <p>Pi-hole and VLAN configuration are handled in later optional sections.
+  The core dashboard works without them from the moment you finish Section 5.</p>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">// Jump to a section</div>
+  <ul class="toc-list">
+    <li><a href="#s0"><span class="toc-num">00</span> Terms you'll see everywhere</a></li>
+    <li><a href="#s1"><span class="toc-num">01</span> What you're building</a></li>
+    <li><a href="#s2"><span class="toc-num">02</span> Files you received</a></li>
+    <li><a href="#s3"><span class="toc-num">03</span> Check what's already installed</a></li>
+    <li><a href="#s4"><span class="toc-num">04</span> Install what's missing</a></li>
+    <li><a href="#s5"><span class="toc-num">05</span> Copy files to your server</a></li>
+    <li><a href="#s6"><span class="toc-num">06</span> Tell the backend where your network is</a></li>
+    <li><a href="#s7"><span class="toc-num">07</span> Run the backend for the first time</a></li>
+    <li><a href="#s8"><span class="toc-num">08</span> Open the dashboard in a browser</a></li>
+    <li><a href="#s9"><span class="toc-num">09</span> Make it start automatically on boot</a></li>
+    <li><a href="#s10"><span class="toc-num">10</span> Rename devices and set up profiles</a></li>
+    <li><a href="#s11"><span class="toc-num">11</span> Set daily time limits per profile</a></li>
+    <li><a href="#s12"><span class="toc-num">12</span> Connect Pi-hole (do after Pi-hole works network-wide)</a></li>
+    <li><a href="#s13"><span class="toc-num">13</span> Connect Wazuh alerts</a></li>
+    <li><a href="#s14"><span class="toc-num">14</span> Add a password</a></li>
+    <li><a href="#s15"><span class="toc-num">15</span> Troubleshooting</a></li>
+    <li><a href="#s16"><span class="toc-num">16</span> Portfolio write-up</a></li>
+    <li><a href="#s17"><span class="toc-num">17</span> When you add VLANs — what to update</a></li>
+  </ul>
+  <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--cyan);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">// 📸 Snapshot checkpoints</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <a href="#s8"  style="font-size:11px;color:var(--muted);text-decoration:none;display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:5px;min-height:36px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><span style="color:var(--cyan);font-weight:700;white-space:nowrap">📸 1</span> Dashboard live on your real network — first post</a>
+      <a href="#s10" style="font-size:11px;color:var(--muted);text-decoration:none;display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:5px;min-height:36px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><span style="color:var(--cyan);font-weight:700;white-space:nowrap">📸 2</span> Profiles and device assignments — access control layer</a>
+      <a href="#s12" style="font-size:11px;color:var(--muted);text-decoration:none;display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:5px;min-height:36px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><span style="color:var(--cyan);font-weight:700;white-space:nowrap">📸 3</span> Kill switch via Pi-hole DNS — most impressive post</a>
+      <a href="#s13" style="font-size:11px;color:var(--muted);text-decoration:none;display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:5px;min-height:36px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><span style="color:var(--cyan);font-weight:700;white-space:nowrap">📸 4</span> Wazuh alerts in dashboard — capstone post</a>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S0: TERMS ══════════════ -->
+<div class="section" id="s0">
+  <div class="section-header">
+    <span class="section-num">00</span>
+    <h2>Terms you'll see everywhere</h2>
+  </div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
+    Every one of these gets explained the first time it appears below too.
+    This section is here so you can come back if something feels unfamiliar.
+  </p>
+  <div class="term-grid">
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">Terminal</div></div>
+      <div class="term-def">The text window where you type commands. On Ubuntu Server there's no mouse or desktop — everything is done here. You connect to it from another computer using SSH (explained below).</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">SSH</div></div>
+      <div class="term-def">Secure Shell — a way to control your Ubuntu Server laptop from a different computer over the network. You type commands on your regular computer and they run on the server. Think of it as a remote control for the terminal.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">IP address</div></div>
+      <div class="term-def">A number like <code>192.168.1.10</code> that identifies a specific device on your network. Your server has one, your phone has one, every device has one. This is how devices find each other.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">Flask / API</div></div>
+      <div class="term-def">Flask is a Python program that turns your server into something a web browser can talk to. An API is the set of questions the browser is allowed to ask it — things like "give me the list of devices" or "turn off this profile."</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">Nginx</div></div>
+      <div class="term-def">A lightweight program that serves web pages. When you type your server's IP into a browser, Nginx is what hands the dashboard page back to you. Without it you'd have to type a long address including a port number every time.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">systemd / service</div></div>
+      <div class="term-def">The system Ubuntu uses to start programs automatically. A "service" is a program registered with systemd so it starts when the server boots and restarts if it crashes. We turn NET-WATCH into a service in Section 9.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">sudo</div></div>
+      <div class="term-def">A word you put in front of commands that need administrator permission. Like right-clicking "Run as administrator" on Windows. The server will ask for your password the first time you use it in a session.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">vnstat</div></div>
+      <div class="term-def">A small program that watches how much data your server sends and receives over time, hour by hour. NET-WATCH reads from it to draw the Network Traffic chart with real numbers.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">arp-scan</div></div>
+      <div class="term-def">A tool that sends a network broadcast asking "is anyone there?" and records every device that answers. This is how NET-WATCH discovers devices on your network without you having to add them by hand.</div>
+    </div>
+    <div class="term-item">
+      <div><div class="term-q">term</div><div class="term-word">Profile / Kill switch</div></div>
+      <div class="term-def">A profile is a group of devices — like "Child 1" or "Gaming Devices" — that share the same schedule and internet rules. The kill switch is a button in the dashboard that instantly cuts that group's internet access.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S1: WHAT YOU'RE BUILDING ══════════════ -->
+<div class="section" id="s1">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2>What you're building</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">→</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>The dashboard</h4>
+        <p>A web page that shows every device on your network in real time — which ones are online, how much bandwidth they're using, which profile they belong to, and any Wazuh security alerts. You open it in any browser on any device on your network. It fits on a tablet without scrolling.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">→</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>The backend</h4>
+        <p>A Python program running silently on your Ubuntu Server laptop. It scans the network every 30 seconds, keeps track of device assignments and profile states, and answers questions from the dashboard. You never interact with it directly after setup.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">→</div></div>
+      <div class="step-body">
+        <h4>Profiles and time limits</h4>
+        <p>You can group devices into profiles like "Kids," "Gaming," or "Work." Each profile gets its own schedule (allowed hours per day of the week) and an optional daily time limit in minutes. When the limit runs out, that profile is automatically blocked. You can override it any time from the dashboard.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <span class="callout-icon">ℹ️</span>
+    <div><b>What this does NOT do yet:</b> The kill switch shows in the dashboard but won't actually cut anyone's internet until you connect Pi-hole in Section 12. Everything else — scanning, profiles, schedules, time limits, the traffic chart — works from the moment you finish Section 7.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S2: FILES ══════════════ -->
+<div class="section" id="s2">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2>Files you received</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:16px">
+    You were sent a folder called <code>netwatch</code>. Here's what each file does and why you need it.
+  </p>
+
+  <div class="files-grid">
+    <div class="file-card">
+      <div class="fname">api/netwatch_api.py</div>
+      <div class="fdesc">The backend brain. Scans your network, stores device and profile data, serves real-time information to the dashboard. This is the only file you'll edit to configure things.</div>
+    </div>
+    <div class="file-card">
+      <div class="fname">web/index.html</div>
+      <div class="fdesc">The dashboard itself. This is the file you'll open in a browser — setup.sh copies it to your server and Nginx serves it at your server's IP address. One self-contained HTML file, no internet connection required after install. Fits on any screen without scrolling.</div>
+    </div>
+    <div class="file-card">
+      <div class="fname">config/devices.json</div>
+      <div class="fdesc">Where NET-WATCH stores the list of known devices. Starts with sample data; gets replaced by your real network devices once you run the first scan.</div>
+    </div>
+    <div class="file-card">
+      <div class="fname">config/profiles.json</div>
+      <div class="fdesc">Where profiles, schedules, and daily limits are stored. Anything you set in the dashboard gets saved here automatically.</div>
+    </div>
+    <div class="file-card">
+      <div class="fname">setup.sh</div>
+      <div class="fdesc">A script that installs everything automatically. You run it once and it handles all the steps in Sections 4 and 9 for you.</div>
+    </div>
+    <div class="file-card">
+      <div class="fname">netwatch.service</div>
+      <div class="fdesc">Tells Ubuntu how to run NET-WATCH as an automatic service. Used by setup.sh — you don't need to open this file.</div>
+    </div>
+    <div class="file-card">
+      <div class="fname">nginx-netwatch.conf</div>
+      <div class="fdesc">Tells Nginx how to serve the dashboard at a plain IP address. Used by setup.sh — you don't need to open this file.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S3: CHECK INSTALLS ══════════════ -->
+<div class="section" id="s3">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2>Check what's already installed</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Connect to your Ubuntu Server laptop</h4>
+        <p>On your regular computer, open a terminal (Mac: press <strong>⌘ Space</strong>, type Terminal, press Enter — Windows: open PowerShell) and type the command below. Replace <code>YOUR_SERVER_IP</code> with your server's actual IP address. If you don't know it, go to your server directly and type <code>ip addr show | grep "inet " | grep -v 127</code> — the number after "inet" is your IP.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">your regular computer</span></div>
+<pre>ssh your_username@YOUR_SERVER_IP
+
+<span class="c"># Example — yours will look similar:</span>
+<span class="c"># ssh scott@192.168.1.10</span>
+
+<span class="c"># It will ask for your Ubuntu password. Type it and press Enter.</span>
+<span class="c"># The password won't appear on screen — that's normal.</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Check each tool — run this entire block at once</h4>
+        <p>Copy everything below and paste it into the terminal. Press Enter. Each line checks one tool. If you see a file path like <code>/usr/bin/nmap</code>, that tool is installed. If you see <code>not found</code> or nothing, you need to install it (Section 4 covers that).</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server — run this first, before installing anything</span></div>
+<pre><span class="c"># Check system tools</span>
+which nmap         <span class="c"># network scanner</span>
+which arp-scan     <span class="c"># device discovery</span>
+which nginx        <span class="c"># web server</span>
+nginx -v 2>&1      <span class="c"># nginx version (if installed)</span>
+which vnstat       <span class="c"># bandwidth tracking</span>
+python3 --version  <span class="c"># Python (usually already here)</span>
+pip3 --version     <span class="c"># Python package installer</span>
+
+<span class="c"># Check Python libraries</span>
+python3 -c "import flask"      2>&1 | tail -1
+python3 -c "import flask_cors" 2>&1 | tail -1
+python3 -c "import requests"   2>&1 | tail -1
+
+<span class="c"># How to read the results:</span>
+<span class="c"># — A path (/usr/bin/...) = installed, skip it in Section 4</span>
+<span class="c"># — "not found" or nothing = needs installing</span>
+<span class="c"># — Python import lines: NO OUTPUT = installed. "ModuleNotFoundError" = needs installing</span></pre>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s3-check">
+      <div class="check-box">✓</div>
+      <div class="check-label">I ran the check commands and know which tools are missing</div>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-icon">💡</span>
+    <div>You've already built Pi-hole, WireGuard, and Wazuh on this server — so Python 3, pip3, and possibly nginx are likely already installed. The check above will confirm this so you don't reinstall things unnecessarily.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S4: INSTALL ══════════════ -->
+<div class="section" id="s4">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2>Install what's missing</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Update Ubuntu's software list</h4>
+        <p>This tells Ubuntu to fetch the latest list of available software. It doesn't install anything yet — it just makes sure the next step knows where to find the most current versions.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo apt update</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Install system tools</h4>
+        <p>Run only the lines for tools that showed "not found" in Section 3. It's safe to run all of them — Ubuntu will skip anything already installed and just say "already the newest version."</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre><span class="c"># Network scanning tools</span>
+sudo apt install -y nmap arp-scan
+
+<span class="c"># Bandwidth tracking (draws the traffic chart with real data)</span>
+sudo apt install -y vnstat
+
+<span class="c"># Web server (serves the dashboard at a plain IP address)</span>
+sudo apt install -y nginx
+
+<span class="c"># Python package installer</span>
+sudo apt install -y python3-pip</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Install Python libraries</h4>
+        <p><code>flask</code> turns your server into an API. <code>flask-cors</code> lets the dashboard page (in a browser on a different device) talk to it. <code>requests</code> lets the backend ask Pi-hole and Wazuh for data. The <code>--break-system-packages</code> flag is needed on Ubuntu 24.04+ — if you get "no such option" it means your Ubuntu version is older and doesn't need the flag at all. See the note below.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>pip3 install flask flask-cors requests
+
+<span class="c"># If you get "no such option: --break-system-packages" — good, ignore it, the command above</span>
+<span class="c"># already worked without it. That flag is only needed on Ubuntu 24.04+.</span>
+<span class="c"># If you get a permissions error, add sudo:</span>
+<span class="c"># sudo pip3 install flask flask-cors requests</span>
+<span class="c"># You'll see "Successfully installed flask-3.x.x ..." when it works.</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Start vnstat so it begins collecting data</h4>
+        <p>vnstat needs to be running before it can measure bandwidth. The traffic chart will show zeros until vnstat has collected at least one hour of data — that's normal. After a few hours you'll see a real curve.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo systemctl enable vnstat
+sudo systemctl start vnstat
+
+<span class="c"># Confirm it's running — you should see "active (running)"</span>
+systemctl status vnstat | grep Active</pre>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s4-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">All system tools installed (nmap, arp-scan, vnstat, nginx)</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s4-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">Python libraries installed (flask, flask-cors, requests)</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s4-c">
+      <div class="check-box">✓</div>
+      <div class="check-label">vnstat is running</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S5: COPY FILES ══════════════ -->
+<div class="section" id="s5">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2>Copy files to your server</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Option A — Use the setup script (recommended)</h4>
+        <p>If you can get the <code>netwatch</code> folder onto your server (via USB drive, SCP, or any file transfer), the setup script does everything automatically: creates folders, copies files, installs the systemd service, configures Nginx, and opens the firewall. Run it from inside the netwatch folder.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server — run from inside the netwatch folder</span></div>
+<pre><span class="c"># First, transfer the netwatch folder to your server.</span>
+<span class="c"># From your regular computer (Mac/Linux), run this:</span>
+<span class="c">#   scp -r /path/to/netwatch your_username@YOUR_SERVER_IP:~/</span>
+<span class="c"># Example:</span>
+<span class="c">#   scp -r ~/Downloads/netwatch scott@192.168.1.10:~/</span>
+
+<span class="c"># Then SSH into your server and run:</span>
+cd ~/netwatch
+chmod +x setup.sh
+sudo ./setup.sh
+
+<span class="c"># The script will print what it's doing at each step.</span>
+<span class="c"># At the end it prints your server's IP address — that's your dashboard URL.</span></pre>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-icon">✅</span>
+    <div>If <code>setup.sh</code> completes without errors, <strong>skip to Section 6</strong>. The script handles Sections 5, 7, and 9 automatically. Come back to Section 6 to configure your network settings before opening the dashboard.</div>
+  </div>
+
+  <div class="callout info">
+    <span class="callout-icon">ℹ️</span>
+    <div><b>What setup.sh actually did with your files:</b>
+      <br><br>
+      It copied <code>web/index.html</code> → <code>/opt/netwatch/web/index.html</code><br>
+      It copied <code>api/netwatch_api.py</code> → <code>/opt/netwatch/api/netwatch_api.py</code><br>
+      It copied <code>config/devices.json</code> + <code>profiles.json</code> → <code>/opt/netwatch/config/</code><br>
+      <br>
+      Then it configured <strong>Nginx</strong> to watch for any browser request coming in on port 80 (the normal web port) and serve <code>index.html</code> in response. That's why typing your server's IP into a browser opens the dashboard — Nginx intercepts the request and hands back that file. The dashboard page then talks to <code>netwatch_api.py</code> (running on port 5000 in the background) to get live device data. You never have to touch <code>index.html</code> directly after this point.
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Option B — Manual install (if setup.sh isn't working)</h4>
+        <p>Run these commands one at a time. Each one is explained above it.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre><span class="c"># Create the installation folder</span>
+sudo mkdir -p /opt/netwatch/api /opt/netwatch/web /opt/netwatch/config
+
+<span class="c"># Copy your files into it</span>
+<span class="c"># (adjust ~/netwatch to wherever you put the folder)</span>
+sudo cp ~/netwatch/api/netwatch_api.py  /opt/netwatch/api/
+sudo cp ~/netwatch/web/index.html       /opt/netwatch/web/
+
+<span class="c"># Only copy config files if they don't already exist</span>
+<span class="c"># (protects your data if you're updating an existing install)</span>
+[ ! -f /opt/netwatch/config/devices.json ]  && sudo cp ~/netwatch/config/devices.json  /opt/netwatch/config/
+[ ! -f /opt/netwatch/config/profiles.json ] && sudo cp ~/netwatch/config/profiles.json /opt/netwatch/config/
+
+<span class="c"># Set permissions</span>
+sudo chmod 644 /opt/netwatch/config/*.json
+sudo chmod 644 /opt/netwatch/web/index.html
+sudo chmod 755 /opt/netwatch/api/netwatch_api.py
+
+echo "Files copied successfully"</pre>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s5-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">Files are in /opt/netwatch/ on the server</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S6: CONFIGURE ══════════════ -->
+<div class="section" id="s6">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2>Tell the backend where your network is</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px">
+    There are two things you must set before the dashboard will show your real devices:
+    your network's subnet, and your server's network interface name. Everything else is optional for now.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Find your server's network interface name</h4>
+        <p>An "interface" is what your server calls its network connection. It used to always be called <code>eth0</code>, but modern Ubuntu gives it names like <code>enp2s0</code> or <code>ens3</code>. You need the real name or the scan won't work. Run this command to find it:</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>ip link show
+
+<span class="c"># Look for an interface that ISN'T "lo" (that's just the server talking to itself)</span>
+<span class="c"># It will look something like:</span>
+<span class="c">#   2: enp2s0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt;</span>
+<span class="c"># The name in that example is "enp2s0" — yours will be similar</span>
+
+<span class="c"># Also find your subnet with this command:</span>
+ip addr show | grep "inet " | grep -v "127.0.0.1"
+<span class="c"># Example output: inet 192.168.1.10/24</span>
+<span class="c"># Your subnet is the first three numbers + .0/24, so: 192.168.1.0/24</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Open the backend config file</h4>
+        <p><code>nano</code> is a text editor that works in the terminal. The arrow keys move the cursor, <strong>Ctrl+O</strong> saves, <strong>Ctrl+X</strong> exits. You're looking for the <code>SCAN_SUBNETS</code> line near the top of the file.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo nano /opt/netwatch/api/netwatch_api.py</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Update SCAN_SUBNETS with your real values</h4>
+        <p>Use <strong>Ctrl+W</strong> to search for <code>SCAN_SUBNETS</code>. You'll see a line like the one below. Replace <code>192.168.1.0/24</code> with your subnet and <code>eth0</code> with your interface name from Step 1.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">python</span><span class="code-file">netwatch_api.py — find this line and update it</span></div>
+<pre><span class="c"># BEFORE (what it looks like now):</span>
+SCAN_SUBNETS = [{"subnet": <span class="s">"192.168.1.0/24"</span>, "interface": <span class="s">"eth0"</span>}]
+
+<span class="c"># AFTER (your real values — example):</span>
+SCAN_SUBNETS = [{"subnet": <span class="s">"192.168.1.0/24"</span>, "interface": <span class="s">"enp2s0"</span>}]
+<span class="c">#                              ↑ your subnet                     ↑ your interface name</span></pre>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin:16px 0;">Press <strong>Ctrl+O</strong> then Enter to save, then <strong>Ctrl+X</strong> to exit nano.</p>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s6-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">I know my server's interface name (e.g. enp2s0)</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s6-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">I updated SCAN_SUBNETS in netwatch_api.py with my real subnet and interface name</div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div>Getting the interface name wrong is the #1 reason the device scanner finds nothing. If the dashboard shows no devices after scanning, come back here and double-check this setting with <code>ip link show</code>.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S7: FIRST RUN ══════════════ -->
+<div class="section" id="s7">
+  <div class="section-header">
+    <span class="section-num">07</span>
+    <h2>Run the backend for the first time</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Start the backend manually (just to test it)</h4>
+        <p>We're running it manually first so you can see any error messages directly. We'll make it start automatically in Section 9. You need <code>sudo</code> (administrator) because <code>arp-scan</code> needs raw network access to send the device-discovery packets.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>cd /opt/netwatch/api
+sudo python3 netwatch_api.py</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>What you should see</h4>
+        <p>The terminal will print a startup message and stay running (it won't return to the command prompt — that's correct, it's actively listening). You should see something like this:</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">output</span><span class="code-file">what success looks like</span></div>
+<pre>── NET-WATCH API v3 ─────────────────────────────────
+  Auth             : disabled (open access)
+  Pi-hole          : disabled (set PIHOLE_ENABLED=true)
+  Wazuh            : disabled (set WAZUH_ENABLED=true)
+  Scan subnets     : ['192.168.1.0/24']
+  Scan interval    : 30s | Usage tick: 60s
+  Background threads: scan + usage started
+  Dashboard URL    :  http://&lt;server-ip&gt;
+─────────────────────────────────────────────────────</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Test that the API is actually responding</h4>
+        <p>Open a <strong>second</strong> SSH connection to your server (or a second terminal window) and run the command below. You should see a response with curly braces <code>{...}</code> containing device and profile data. If you see an error, the backend isn't running correctly — check the first terminal for error messages.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server — second terminal</span></div>
+<pre>curl http://localhost:5000/api/status
+
+<span class="c"># You should see a long JSON response starting with:</span>
+<span class="c"># {"bandwidth":{"rx_bytes":...,"total_tb":...},"devices":[...</span>
+<span class="c"># That means the backend is working correctly.</span></pre>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s7-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">Backend starts without errors</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s7-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">curl http://localhost:5000/api/status returns JSON data</div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div><b>Common error: "Address already in use"</b> — something else is using port 5000. Run <code>sudo lsof -i :5000</code> to see what, then kill it with <code>sudo kill -9 PID</code> (replace PID with the number shown).</div>
+  </div>
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div><b>Common error: "ModuleNotFoundError: No module named flask"</b> — the Python library didn't install correctly. Re-run: <code>pip3 install flask flask-cors requests</code> (no extra flags needed on older Ubuntu — add <code>sudo</code> if you get a permissions error)</div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S8: OPEN DASHBOARD ══════════════ -->
+<div class="section" id="s8">
+  <div class="section-header">
+    <span class="section-num">08</span>
+    <h2>Open the dashboard in a browser</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px">
+    The file <code>web/index.html</code> from your netwatch folder <em>is</em> the dashboard.
+    <code>setup.sh</code> copied it to <code>/opt/netwatch/web/index.html</code> on your server,
+    and configured Nginx to serve it whenever a browser on your network makes a request.
+    So when you type your server's IP into a browser, Nginx hands that file to your browser
+    and it becomes the dashboard you see. You're not loading a website from the internet —
+    it's just a file sitting on your server being delivered locally.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>If you used setup.sh — open by IP address</h4>
+        <p>The setup script configured Nginx to serve the dashboard at your server's plain IP address. On any device on your network, open a browser and type your server's IP. No port number needed.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">browser address bar</span><span class="code-file">open this on any device on your network</span></div>
+<pre>http://192.168.1.10
+<span class="c"># Replace with your actual server IP address</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>If you're testing without Nginx — use the port directly</h4>
+        <p>If you skipped the setup script and Nginx isn't configured yet, add <code>:5000</code> to reach the API directly. The dashboard HTML file can also be opened directly from the file system — find <code>/opt/netwatch/web/index.html</code> and open it in a browser on the server itself, or copy it to another device.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">browser address bar</span><span class="code-file">direct API access (no Nginx)</span></div>
+<pre>http://192.168.1.10:5000/api/status
+<span class="c"># This confirms the backend is reachable from another device</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>What you should see</h4>
+        <p>The NET-WATCH Overview page loads. The stat cards at the top will show device counts from your real network within 30 seconds (the first automatic scan runs at startup). The traffic chart shows zeros until vnstat has collected data — give it an hour and check back. Device and Profile lists populate immediately from the config files.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Trigger a manual scan to see your devices immediately</h4>
+        <p>The automatic scan runs every 30 seconds in the background. To see devices right now without waiting, go to the <strong>Devices</strong> page in the sidebar and click the <strong>Scan Network</strong> button. New devices will appear as "Unknown (IP address)" — you can rename them in Section 10.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s8-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">Dashboard opens in a browser on my network</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s8-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">Devices appear in the Devices page after scanning</div>
+    </div>
+  </div>
+
+  <!-- SNAPSHOT 1 -->
+  <div class="callout snap">
+    <div class="snap-badge">📸 Snapshot 1 of 4</div>
+    <div class="snap-title">First good post moment — dashboard live on your real network</div>
+    <div class="snap-body">
+      <p>This is the post that establishes the project exists. Your dashboard is now running on real hardware, scanning your real network, showing real device data. Take this screenshot before you rename anything — the "Unknown (192.168.1.xx)" entries actually show the scanner working, which is the impressive part.</p>
+      <ul class="snap-list">
+        <li><strong>What to show:</strong> Overview page with the stat cards at the top (Devices Online, Total Bandwidth), the Network Traffic chart, and the Device Status panel showing real IPs</li>
+        <li><strong>What to blur:</strong> Your router's external IP if it appears anywhere — internal IPs like 192.168.1.x are fine to leave visible</li>
+        <li><strong>What NOT to blur:</strong> Device counts, the traffic chart, the Network Status panel — these show scale and prove it's real</li>
+      </ul>
+      <div class="snap-caption">
+        <span>Suggested caption</span>
+        "Built a real-time network monitoring dashboard for my homelab SOC. The Python Flask backend runs on Ubuntu Server and uses ARP scanning to discover every device on the network — no manual configuration needed. Stack: Python / Flask / arp-scan / vnstat / Nginx / systemd. #Homelab #CyberSecurity #SOC #BlueTeam"
+      </div>
+      <div class="snap-platforms">
+        <span class="snap-platform gh">GitHub — add to README as the hero screenshot</span>
+        <span class="snap-platform li">LinkedIn — strong first post, post this one</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S9: AUTO-START ══════════════ -->
+<div class="section" id="s9">
+  <div class="section-header">
+    <span class="section-num">09</span>
+    <h2>Make it start automatically on boot</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px">
+    Right now the backend only runs while you're keeping that terminal window open. This section makes it
+    run automatically every time the server boots and restart itself if it ever crashes.
+    Skip this section if you used <code>setup.sh</code> — it already did this for you.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Stop the manually running backend first</h4>
+        <p>Go to the terminal where you started the backend in Section 7 and press <strong>Ctrl+C</strong> to stop it. We're about to hand it off to systemd.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Install the systemd service file</h4>
+        <p>A service file tells Ubuntu exactly how to start and manage a program. Copy the one we provided and register it with systemd.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre><span class="c"># Copy the service file into the system service directory</span>
+sudo cp ~/netwatch/netwatch.service /etc/systemd/system/netwatch.service
+
+<span class="c"># Tell systemd to re-read its service files (sees the new one)</span>
+sudo systemctl daemon-reload
+
+<span class="c"># Enable it — means it will start automatically at every boot</span>
+sudo systemctl enable netwatch
+
+<span class="c"># Start it now (without rebooting)</span>
+sudo systemctl start netwatch
+
+<span class="c"># Confirm it's running — look for "active (running)" in the output</span>
+sudo systemctl status netwatch</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Configure Nginx to serve the dashboard</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre><span class="c"># Copy the Nginx config file</span>
+sudo cp ~/netwatch/nginx-netwatch.conf /etc/nginx/sites-available/netwatch
+
+<span class="c"># Enable it (create a link in sites-enabled)</span>
+sudo ln -sf /etc/nginx/sites-available/netwatch /etc/nginx/sites-enabled/netwatch
+
+<span class="c"># Remove the default Nginx page so NET-WATCH loads at the root URL</span>
+sudo rm -f /etc/nginx/sites-enabled/default
+
+<span class="c"># Test the Nginx config for errors</span>
+sudo nginx -t
+
+<span class="c"># If the test says "ok", reload Nginx</span>
+sudo systemctl reload nginx</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Open the firewall for HTTP</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre><span class="c"># Only run this if UFW (firewall) is active on your server</span>
+<span class="c"># Check first:</span>
+sudo ufw status
+
+<span class="c"># If it says "Status: active", run:</span>
+sudo ufw allow 80/tcp comment "NET-WATCH dashboard"</pre>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s9-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">systemctl status netwatch shows "active (running)"</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s9-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">Dashboard opens at http://YOUR_SERVER_IP (no port number needed)</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s9-c">
+      <div class="check-box">✓</div>
+      <div class="check-label">After rebooting the server, the dashboard comes back on its own</div>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-icon">💡</span>
+    <div><b>Day-to-day management commands:</b><br>
+    View logs: <code>journalctl -u netwatch -f</code><br>
+    Restart after config changes: <code>sudo systemctl restart netwatch</code><br>
+    Update files and restart: <code>sudo ./setup.sh</code> (safe to re-run anytime)
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S10: RENAME DEVICES ══════════════ -->
+<div class="section" id="s10">
+  <div class="section-header">
+    <span class="section-num">10</span>
+    <h2>Rename devices and set up profiles</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Rename an unknown device</h4>
+        <p>After your first scan, devices appear as "Unknown (192.168.1.xx)". To rename one, go to the <strong>Devices</strong> page in the sidebar. Click anywhere on the device's row (or the ✎ Edit button). A panel slides in with fields for Name, Type, and Icon. Change them and click <strong>Save Changes</strong>. The name updates everywhere in the dashboard immediately.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Create a profile</h4>
+        <p>Go to <strong>Users / Profiles</strong> in the sidebar. Click <strong>Add Profile</strong> at the top right. Give it a name (like "Child 1" or "Gaming Devices"), choose a start and end time for allowed hours, and click Create. The profile card appears immediately.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Assign devices to a profile</h4>
+        <p>Two ways to do this: on the <strong>Devices</strong> page, each row has a dropdown in the Profile column — select a profile there and the assignment saves instantly. Or go to <strong>Users / Profiles</strong>, click a profile card, and see which devices are already assigned.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Edit a profile's name, color, or icon</h4>
+        <p>Click anywhere on a profile card. An edit panel opens with fields for Name, Icon (any emoji), Color, and Pi-hole Group (leave blank for now). Change what you need and click <strong>Save Changes</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s10-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">All my real devices renamed from "Unknown (IP)" to proper names</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s10-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">Devices assigned to profiles</div>
+    </div>
+  </div>
+
+  <!-- SNAPSHOT 2 -->
+  <div class="callout snap">
+    <div class="snap-badge">📸 Snapshot 2 of 4</div>
+    <div class="snap-title">Access control layer — profiles and device assignments</div>
+    <div class="snap-body">
+      <p>This shows the organizational and access-control layer on top of the raw scanning. It's more interesting than Snapshot 1 for a portfolio because it demonstrates deliberate architecture — you've categorized devices by purpose and ownership, which maps directly to network segmentation concepts interviewers ask about.</p>
+      <ul class="snap-list">
+        <li><strong>What to show:</strong> The Users / Profiles page with your real profile cards (Child 1, Gaming Devices, Work Devices, etc.) — you can use real names or fictional ones, just be consistent</li>
+        <li><strong>Screenshot 2a — also take:</strong> The Devices page showing the table with real device names, types, and their profile assignments in the dropdown column</li>
+        <li><strong>What to blur:</strong> Nothing here needs blurring — device names and profile assignments aren't sensitive</li>
+      </ul>
+      <div class="snap-caption">
+        <span>Suggested caption</span>
+        "Added per-profile access control to the dashboard. Each profile maps to a group of devices and gets its own internet schedule and daily time budget. The backend tracks usage minute-by-minute and auto-blocks when the limit is hit. #Homelab #NetworkSecurity #AccessControl"
+      </div>
+      <div class="snap-platforms">
+        <span class="snap-platform gh">GitHub — add as second screenshot in README showing the profiles page</span>
+        <span class="snap-platform li">LinkedIn — good follow-up post a few days after Snapshot 1</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S11: TIME LIMITS ══════════════ -->
+<div class="section" id="s11">
+  <div class="section-header">
+    <span class="section-num">11</span>
+    <h2>Set daily time limits per profile</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Open the schedule editor</h4>
+        <p>On the <strong>Users / Profiles</strong> page, click a profile card. In the edit panel, click the <strong>📅 Edit Schedule &amp; Daily Limits</strong> button. A full 7-day editor opens.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Set allowed hours and time limits</h4>
+        <p>Each row is one day of the week. Three columns per row:</p>
+        <p><strong>Start</strong> — what time internet access begins for this profile on this day.</p>
+        <p><strong>End</strong> — what time access ends.</p>
+        <p><strong>Limit (min)</strong> — maximum minutes of internet allowed within that window. Leave blank for no cap. Set to <code>60</code> for one hour, <code>120</code> for two hours, etc.</p>
+        <p><strong>To block a day completely</strong> — set Start and End to the same time (e.g. both <code>00:00</code>).</p>
+        <p>Click <strong>Save Schedule</strong> when done. The profile card updates immediately with the new schedule and budget bar.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>How the budget works automatically</h4>
+        <p>Every 60 seconds, the backend checks which profiles have at least one device online. For any profile that's within its allowed window, it adds 1 minute to that profile's "used today" counter. When the counter hits the daily limit, the profile is automatically blocked — no action needed from you. The counter resets to zero at midnight. You can manually reset it anytime from the dashboard if you want to grant extra time.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <span class="callout-icon">ℹ️</span>
+    <div>The budget tracks time by detecting whether any device in the profile is online. A device is "online" if it responded to the last automatic arp-scan (runs every 30 seconds). If a device goes to sleep, its time stops counting.</div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s11-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">Schedules and daily limits set for each profile</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S12: PIHOLE ══════════════ -->
+<div class="section" id="s12">
+  <div class="section-header">
+    <span class="section-num">12</span>
+    <h2>Connect Pi-hole — do this after Pi-hole works network-wide</h2>
+  </div>
+
+  <div class="callout info">
+    <span class="callout-icon">ℹ️</span>
+    <div>Skip this section until Pi-hole is your network's DNS server for all devices. Without that, toggling a profile's kill switch in the dashboard changes a flag in the dashboard but doesn't actually block anyone's internet. Pi-hole must be the DNS server before the kill switch does anything real.</div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Create a group in Pi-hole for each profile</h4>
+        <p>Pi-hole groups let you apply different rules to different devices. Log into your Pi-hole admin page, go to <strong>Group Management → Groups</strong>, and create one group for each profile you want to be killable. Name them exactly the same as the "Pi-hole Group Name" you'll set in Step 3 — for example: <code>child1</code>, <code>gaming</code>, <code>guest</code>.</p>
+        <p>Then go to <strong>Group Management → Clients</strong>, find each device's IP address, and add it to the appropriate group.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Test that NET-WATCH can reach Pi-hole</h4>
+        <p>This is safe to run at any time — it only reads Pi-hole's version, it never changes anything.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>curl http://localhost:5000/api/pihole/probe
+
+<span class="c"># Good response looks like:</span>
+<span class="c"># {"reachable":true,"version":6,"base_url":"http://192.168.1.1:80"}</span>
+<span class="c"># If reachable is false, check that PIHOLE_HOST in netwatch_api.py</span>
+<span class="c"># matches your Pi-hole's actual IP address.</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Enable Pi-hole in the backend config</h4>
+        <p>Open <code>netwatch_api.py</code> with nano, find these lines near the top, and update them:</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo nano /opt/netwatch/api/netwatch_api.py</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">python</span><span class="code-file">netwatch_api.py — find and update these four lines</span></div>
+<pre>PIHOLE_HOST     = <span class="s">"192.168.1.1"</span>      <span class="c"># ← your Pi-hole's IP address</span>
+PIHOLE_V6_PASS  = <span class="s">"your_password"</span>    <span class="c"># ← your Pi-hole admin password (v6)</span>
+<span class="c"># OR for Pi-hole v5:</span>
+PIHOLE_V5_TOKEN = <span class="s">"your_api_token"</span>   <span class="c"># ← from Pi-hole Settings → API</span>
+PIHOLE_ENABLED  = <span class="kw">True</span>               <span class="c"># ← change False to True</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Set the Pi-hole Group Name on each profile</h4>
+        <p>In the dashboard, go to <strong>Users / Profiles</strong>, click each profile card, and fill in the <strong>Pi-hole Group Name</strong> field with the exact group name you created in Pi-hole in Step 1 (e.g. <code>child1</code>). Save the profile. Now when you hit that profile's kill switch, NET-WATCH will disable exactly that group in Pi-hole — without touching any other group or Pi-hole's global ad-blocking.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">5</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Restart the backend to apply your changes</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo systemctl restart netwatch
+
+<span class="c"># Check that it restarted cleanly</span>
+sudo systemctl status netwatch | head -5</pre>
+  </div>
+
+  <div class="callout danger">
+    <span class="callout-icon">🚨</span>
+    <div><b>Important:</b> NET-WATCH uses Pi-hole's <strong>group management API</strong>, never its global disable button. Hitting a kill switch will disable only that profile's Pi-hole group — it will NOT pause ad-blocking for your whole network. If you're on Pi-hole v5, the kill switch will not work (v5 doesn't expose per-group control via API). The dashboard will tell you this clearly.</div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s12-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">Pi-hole groups created matching each profile</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s12-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">curl /api/pihole/probe returns reachable:true</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s12-c">
+      <div class="check-box">✓</div>
+      <div class="check-label">PIHOLE_ENABLED = True and password set in netwatch_api.py</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s12-d">
+      <div class="check-box">✓</div>
+      <div class="check-label">Pi-hole Group Name filled in on each profile card</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s12-e">
+      <div class="check-box">✓</div>
+      <div class="check-label">Kill switch tested — toggling a profile actually blocks a device</div>
+    </div>
+  </div>
+
+  <!-- SNAPSHOT 3 -->
+  <div class="callout snap">
+    <div class="snap-badge">📸 Snapshot 3 of 4</div>
+    <div class="snap-title">Best technical post — live kill switch via Pi-hole DNS</div>
+    <div class="snap-body">
+      <p>This is the highest-impact portfolio post of the four. It demonstrates an end-to-end security control that actually works — from dashboard button to DNS API to real device being blocked — which is a concrete, verifiable capability. This is what separates a portfolio project from a tutorial follow-along.</p>
+      <p>To stage it: enable the kill switch on a profile that has a device (like a phone or tablet you can test on), then open a browser on that device and try to load a website. It should fail to load. Then take the screenshot.</p>
+      <ul class="snap-list">
+        <li><strong>Screenshot A (dashboard side):</strong> The Users / Profiles page showing the profile card with the red "Blocked" badge and kill switch active. Make sure the profile name and device count are visible.</li>
+        <li><strong>Screenshot B (device side):</strong> The blocked device's browser showing a DNS error ("This site can't be reached" or similar). Take this on the device itself.</li>
+        <li><strong>What to blur:</strong> If Screenshot B shows your home network name in the browser's error page, blur that. The IP and DNS error itself is fine to show.</li>
+        <li><strong>Combine them:</strong> Put both screenshots side by side in one image — dashboard on the left, blocked browser on the right. This single image tells the whole story.</li>
+      </ul>
+      <div class="snap-caption">
+        <span>Suggested caption</span>
+        "Pi-hole kill switch working end-to-end. One button in the dashboard calls Pi-hole's group management API to disable DNS resolution for that device group — not the global disable (which would kill all ad-blocking), just the specific client group. The device loses internet within seconds of the DNS TTL expiring. Built on Pi-hole v6 + Python Flask. #Homelab #PiHole #DNS #NetworkSecurity #SOC"
+      </div>
+      <div class="snap-platforms">
+        <span class="snap-platform gh">GitHub — add as third screenshot, or create a short GIF of the toggle</span>
+        <span class="snap-platform li">LinkedIn — this one gets the most engagement, post it separately</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S13: WAZUH ══════════════ -->
+<div class="section" id="s13">
+  <div class="section-header">
+    <span class="section-num">13</span>
+    <h2>Connect Wazuh alerts</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px">
+    If you have Wazuh running (from your existing homelab), NET-WATCH can pull real security alerts into
+    the Security Alerts panel and the Alerts page. Skip this section if Wazuh isn't set up yet.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Confirm Wazuh's API is reachable</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre><span class="c"># Check that Wazuh is running (the -k flag allows the self-signed SSL cert)</span>
+curl -k https://localhost:55000
+
+<span class="c"># You should see a JSON response with "title": "Wazuh API"</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Enable Wazuh in the backend config</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">python</span><span class="code-file">netwatch_api.py — find and update these lines</span></div>
+<pre>WAZUH_URL      = <span class="s">"https://localhost:55000"</span>  <span class="c"># ← Wazuh API address (usually this default)</span>
+WAZUH_USER     = <span class="s">"wazuh"</span>                   <span class="c"># ← Wazuh API username</span>
+WAZUH_PASS     = <span class="s">"your_wazuh_password"</span>     <span class="c"># ← Wazuh API password</span>
+WAZUH_ENABLED  = <span class="kw">True</span>                      <span class="c"># ← change False to True</span></pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo systemctl restart netwatch</pre>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s13-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">WAZUH_ENABLED = True in netwatch_api.py</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s13-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">Security Alerts panel shows real Wazuh events</div>
+    </div>
+  </div>
+
+  <!-- SNAPSHOT 4 -->
+  <div class="callout snap">
+    <div class="snap-badge">📸 Snapshot 4 of 4</div>
+    <div class="snap-title">Full SOC integration — Wazuh alerts in the dashboard</div>
+    <div class="snap-body">
+      <p>This is your "finished product" post. The dashboard now shows real security events from Wazuh with severity levels, agent names, and MITRE ATT&CK technique IDs. This is what a commercial SOC dashboard looks like — you built the equivalent from scratch.</p>
+      <p>If you don't have real alerts yet, you can trigger a test alert by making a few failed SSH login attempts against your server from another device — Wazuh will flag these as a brute-force attempt (rule level 10+) which will appear in the dashboard within a minute.</p>
+      <ul class="snap-list">
+        <li><strong>What to show:</strong> The Overview page with the Security Alerts panel showing real events, or the full Alerts page with the event table and MITRE ATT&CK grid</li>
+        <li><strong>The best frame:</strong> Overview page in landscape on your Galaxy Tab — all panels visible simultaneously, alerts showing in the top-right corner. This single screenshot tells the whole story of the project.</li>
+        <li><strong>What to blur:</strong> If any alert shows a specific CVE or vulnerability detail about your actual system, blur that line. Agent names and rule descriptions are fine to show.</li>
+      </ul>
+      <div class="snap-caption">
+        <span>Suggested caption</span>
+        "Full homelab SOC stack complete. NET-WATCH now integrates: Pi-hole (DNS-layer access control + blocklists), Wazuh SIEM (real-time alerts with MITRE ATT&CK mapping), arp-scan (Layer 2 device discovery), and vnstat (bandwidth monitoring) — all surfaced in a single dashboard that fits on a tablet without scrolling. Everything runs on Ubuntu Server as systemd services. #Homelab #SIEM #Wazuh #SOC #BlueTeam #CyberSecurity #Security+"
+      </div>
+      <div class="snap-platforms">
+        <span class="snap-platform gh">GitHub — update README with this as the final hero image, replace the earlier one</span>
+        <span class="snap-platform li">LinkedIn — your capstone post, most comprehensive, post after the others</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S14: PASSWORD ══════════════ -->
+<div class="section" id="s14">
+  <div class="section-header">
+    <span class="section-num">14</span>
+    <h2>Add a password</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px">
+    The dashboard is currently open — anyone on your network can access it. That's fine while setting
+    things up on a trusted home network. Add the password once you're happy with everything,
+    especially before adding VLANs that connect less-trusted devices.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Generate a secret key</h4>
+        <p>The secret key is a long random string that makes session cookies secure. Run this once to generate one — copy the output, you'll need it in the next step.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>python3 -c "import secrets; print(secrets.token_hex(32))"
+<span class="c"># Copy the long hex string it prints — example:</span>
+<span class="c"># a3f9e2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1</span></pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Set password in the systemd service file</h4>
+        <p>Open the service file and add two Environment lines inside the [Service] section.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo nano /etc/systemd/system/netwatch.service</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">ini</span><span class="code-file">netwatch.service — add the two Environment lines shown</span></div>
+<pre>[Service]
+User=root
+WorkingDirectory=/opt/netwatch/api
+ExecStart=/usr/bin/python3 netwatch_api.py
+<span class="v">Environment=NETWATCH_PASSWORD=your_strong_password_here</span>
+<span class="v">Environment=NETWATCH_SECRET=paste_your_generated_key_here</span>
+Restart=always
+RestartSec=5</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Re-enable the login screen in index.html</h4>
+        <p>Three small text changes in the dashboard file. Use nano's search (Ctrl+W) to find each one.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo nano /opt/netwatch/web/index.html</pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">diff</span><span class="code-file">three changes to make in index.html</span></div>
+<pre><span class="c"># Change 1 — find this (Ctrl+W to search):</span>
+id="login-screen" style="display:none"
+<span class="c"># Change to:</span>
+id="login-screen" style=""
+
+<span class="c"># Change 2 — find this:</span>
+id="dashboard"&gt;
+<span class="c"># Change to:</span>
+id="dashboard" style="display:none"&gt;
+
+<span class="c"># Change 3 — find this:</span>
+bootDashboard(); // auth disabled
+<span class="c"># Change to:</span>
+checkExistingSession();</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Restart everything to apply changes</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo systemctl daemon-reload
+sudo systemctl restart netwatch
+sudo systemctl reload nginx</pre>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-icon">💡</span>
+    <div>Once enabled, the dashboard shows a login screen when you open it. Enter your password once per device — it stays logged in for 24 hours via a session cookie. Each device (your tablet, your phone, your laptop) needs to log in separately.</div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s14-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">NETWATCH_PASSWORD and NETWATCH_SECRET set in netwatch.service</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s14-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">Three changes made in index.html to re-enable login screen</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s14-c">
+      <div class="check-box">✓</div>
+      <div class="check-label">Dashboard prompts for password and accepts it correctly</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════ S15: TROUBLESHOOTING ══════════════ -->
+<div class="section" id="s15">
+  <div class="section-header">
+    <span class="section-num">15</span>
+    <h2>Troubleshooting</h2>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">?</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Dashboard won't load at all</h4>
+        <p>Check the backend is running: <code>sudo systemctl status netwatch</code>. If it shows "failed", read the error: <code>journalctl -u netwatch -n 30 --no-pager</code>. Common causes: wrong Python path, missing library, file not found at /opt/netwatch/api/netwatch_api.py.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">?</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>No devices appear after scanning</h4>
+        <p>Almost always an interface name mismatch. Run <code>ip link show</code> and confirm the interface name in SCAN_SUBNETS matches exactly. Manual test: <code>sudo arp-scan --interface=YOUR_INTERFACE 192.168.1.0/24</code> — if this returns devices, the interface name is right.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">?</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Traffic chart shows flat line / zeros</h4>
+        <p>vnstat needs at least one hour of data. Check it's running: <code>systemctl status vnstat</code>. Check it has data: <code>vnstat -h</code>. If the interface column shows your interface name with real numbers, data exists — if the chart still shows zeros, check that the interface name in vnstat matches what you set in SCAN_SUBNETS.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">?</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Pi-hole probe says unreachable</h4>
+        <p>Check that PIHOLE_HOST in netwatch_api.py matches Pi-hole's IP: <code>ping 192.168.1.1</code>. Test directly: <code>curl http://192.168.1.1/admin/api.php</code>. If they're on different VLANs, you need a firewall rule allowing your server's IP to reach Pi-hole on port 80.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">?</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>How to watch live logs</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server — diagnostic commands</span></div>
+<pre><span class="c"># Live backend logs (Ctrl+C to stop)</span>
+journalctl -u netwatch -f
+
+<span class="c"># Last 50 lines of logs</span>
+journalctl -u netwatch -n 50 --no-pager
+
+<span class="c"># Test API is responding</span>
+curl http://localhost:5000/api/status | python3 -m json.tool | head -20
+
+<span class="c"># Check Pi-hole connection</span>
+curl http://localhost:5000/api/pihole/probe
+
+<span class="c"># Check network routes for scanning</span>
+curl http://localhost:5000/api/network/routes
+
+<span class="c"># Check VPN tunnel (if using WireGuard)</span>
+curl http://localhost:5000/api/network/vpn</pre>
+  </div>
+</div>
+
+
+<!-- ══════════════ S16: PORTFOLIO ══════════════ -->
+<div class="section" id="s16">
+  <div class="section-header">
+    <span class="section-num">16</span>
+    <h2>Portfolio write-up</h2>
+  </div>
+
+  <div class="callout write">
+    <span class="callout-icon">📝</span>
+    <div><b>Why this matters for SOC roles:</b> This project demonstrates hands-on work across Security+ domains D2 (Network Architecture), D3 (Implementation), and D4 (Security Operations). Every interviewer who asks "tell me about a homelab project" gets a concrete, technical answer with real architecture decisions you can explain.</div>
+  </div>
+
+  <div class="callout info">
+    <span class="callout-icon">📸</span>
+    <div><b>Snapshot checkpoints are already in the guide:</b> Four specific screenshot moments are built into Sections 8, 10, 12, and 13 — each with exact guidance on what to show, what to blur, suggested captions, and where to post. The steps below cover what to put in your GitHub README and how to frame your LinkedIn presence overall.</div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">→</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>GitHub README — what to include</h4>
+        <p><strong>Project title and one-line description:</strong> "NET-WATCH — Real-time network monitoring dashboard integrating Pi-hole, Wazuh, and vnstat on an Ubuntu Server homelab."</p>
+        <p><strong>Screenshot:</strong> A screenshot of the real dashboard running on your network. Blur any external IP addresses but leave internal IPs visible — they show scale.</p>
+        <p><strong>Stack:</strong> Python 3 / Flask API, arp-scan (Layer 2 device discovery), vnstat (bandwidth tracking), Pi-hole API (DNS-based access control), Wazuh REST API (SIEM alerts), Nginx (reverse proxy), systemd (process management).</p>
+        <p><strong>Architecture decision you can explain in an interview:</strong> Why the kill switch uses Pi-hole's group management API (not the global disable endpoint) — disabling Pi-hole globally would remove ad-blocking for the whole network, which has nothing to do with cutting one device's internet access. The group API targets exactly one set of clients.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">→</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>LinkedIn post</h4>
+        <p>Post at a meaningful milestone — when devices are showing up from real scans, or when the first kill switch actually blocks a device. Don't post work-in-progress. Include the dashboard screenshot and tag it with #Homelab #CyberSecurity #SOC #BlueTeam #Security.</p>
+        <p>Draft: "Built a full-stack network monitoring dashboard for my homelab SOC. The Python Flask backend scans the network every 30 seconds using ARP, integrates with Pi-hole for DNS-based per-profile kill switches, ingests Wazuh security alerts with MITRE ATT&CK tagging, and tracks bandwidth per-device via vnstat. The frontend is a no-scroll full-viewport dashboard that fits on a tablet. Everything runs as a systemd service on Ubuntu Server and restarts automatically."</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-dot">→</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Interview talking points</h4>
+        <p><strong>Why ARP scanning and not ping scanning?</strong> ARP operates at Layer 2 and works even on devices that block ICMP (ping). Devices can't ignore ARP — it's required for the network to function. This means ARP scanning finds every device on the subnet including ones that appear offline to ping.</p>
+        <p><strong>How does Pi-hole block internet access?</strong> Pi-hole is a DNS sinkhole — it intercepts DNS queries (the "what's the IP for google.com?" requests) and returns a fake response for blocked domains. When a profile's Pi-hole group is disabled, its devices can't resolve domain names, so the internet appears broken. Direct IP connections still work — this is a DNS-layer control, not a firewall rule.</p>
+        <p><strong>What would change if you added VLANs?</strong> The SCAN_SUBNETS list would need one entry per VLAN, each with the right interface name. Three firewall rules would be needed: server → Pi-hole on port 80, server → each VLAN subnet for ARP, and dashboard device → server on port 5000. CORS_ALLOWED_ORIGINS in the backend would be tightened to specific admin VLAN ranges.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s16-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">GitHub repository created with README and screenshot</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s16-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">LinkedIn post published at a meaningful milestone</div>
+    </div>
+  </div>
+
+
+<!-- ══════════════ S17: VLANs ══════════════ -->
+<div class="section" id="s17">
+  <div class="section-header">
+    <span class="section-num">17</span>
+    <h2>When you add VLANs — what to update</h2>
+  </div>
+
+  <p style="font-size:12px;color:var(--muted);margin-bottom:20px">
+    Do this section only when you're ready to segment your network into VLANs.
+    NET-WATCH keeps working on a flat network indefinitely — VLANs are optional.
+    When you do add them, this section tells you exactly what breaks and how to fix it.
+  </p>
+
+  <div class="callout info">
+    <span class="callout-icon">ℹ️</span>
+    <div><b>What a VLAN is, in plain English:</b> A VLAN (Virtual LAN) splits one physical network into
+    separate isolated networks. A device on the Kids VLAN can't talk to a device on the IoT VLAN
+    even though they're on the same router. Each VLAN gets its own IP range — for example
+    <code>192.168.10.0/24</code> for IoT and <code>192.168.20.0/24</code> for kids.
+    Your router enforces the separation with firewall rules you control.</div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">1</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Before you start — note down every device's MAC address</h4>
+        <p>When you move devices into VLANs, their IP addresses will change. NET-WATCH tracks devices by IP, so they'll appear as unknown after the move. MAC addresses don't change — they're burned into the hardware. Write down the MAC from the Devices table now so you can match new IPs to old device names after the transition.</p>
+        <p>Go to the <strong>Devices</strong> page in the dashboard and take a screenshot of the full table. The MAC address column is your reference.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-line"><div class="step-dot">2</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Update SCAN_SUBNETS in netwatch_api.py</h4>
+        <p>Add one entry per VLAN. The interface name is your server's physical network interface
+        followed by a dot and the VLAN ID number. For example if your physical interface is
+        <code>enp2s0</code> and your IoT VLAN ID is 10, the interface name is <code>enp2s0.10</code>.</p>
+        <p>Check that VLAN interfaces exist on your server first:</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server — check VLAN interfaces exist</span></div>
+<pre>ip link show | grep "\."
+<span class="c"># If you see lines like "enp2s0.10" your VLAN interfaces are already created</span>
+<span class="c"># If nothing shows, the VLAN interfaces need to be created on your server first</span>
+
+<span class="c"># Create a VLAN interface (example — VLAN 10 on enp2s0):</span>
+sudo ip link add link enp2s0 name enp2s0.10 type vlan id 10
+sudo ip link set enp2s0.10 up
+<span class="c"># Repeat for each VLAN ID you're using</span></pre>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">python</span><span class="code-file">netwatch_api.py — update SCAN_SUBNETS (Ctrl+W to search in nano)</span></div>
+<pre><span class="c"># BEFORE — single flat network:</span>
+SCAN_SUBNETS = [{"subnet": <span class="s">"192.168.1.0/24"</span>, "interface": <span class="s">"eth0"</span>}]
+
+<span class="c"># AFTER — one entry per VLAN (use your real subnet and interface names):</span>
+SCAN_SUBNETS = [
+    {"subnet": <span class="s">"192.168.1.0/24"</span>,  "interface": <span class="s">"enp2s0"</span>},      <span class="c"># Main LAN</span>
+    {"subnet": <span class="s">"192.168.10.0/24"</span>, "interface": <span class="s">"enp2s0.10"</span>},   <span class="c"># IoT VLAN</span>
+    {"subnet": <span class="s">"192.168.20.0/24"</span>, "interface": <span class="s">"enp2s0.20"</span>},   <span class="c"># Kids VLAN</span>
+    {"subnet": <span class="s">"192.168.30.0/24"</span>, "interface": <span class="s">"enp2s0.30"</span>},   <span class="c"># Guest VLAN</span>
+]</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">3</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Add firewall rules so the scanner can reach each VLAN</h4>
+        <p>VLANs are isolated by design — your server can't talk to them without explicit permission.
+        You need three firewall rules per new VLAN. Add these on your router or firewall
+        (OPNsense, pfSense, or whatever you're using). Substitute your server's real IP and
+        your real VLAN subnets.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">firewall rules</span><span class="code-file">add these on your router — repeat for each VLAN</span></div>
+<pre><span class="c"># Replace 192.168.1.10 with your NET-WATCH server's IP
+# Replace 192.168.10.0/24 with the VLAN subnet
+# Replace 192.168.1.1 with your Pi-hole's IP</span>
+
+<span class="c"># Rule 1 — server can send ARP probes into the VLAN (device discovery)</span>
+Allow: 192.168.1.10 → 192.168.10.0/24   protocol: any
+
+<span class="c"># Rule 2 — VLAN devices can open the dashboard in a browser</span>
+Allow: 192.168.10.0/24 → 192.168.1.10   port: 80
+
+<span class="c"># Rule 3 — server can call Pi-hole's API (kill switches + blocklists)</span>
+Allow: 192.168.1.10 → 192.168.1.1       port: 80</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">4</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Restart NET-WATCH to pick up the new subnets</h4>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo systemctl restart netwatch
+
+<span class="c"># Watch the first scan happen live — devices on new VLANs should appear</span>
+journalctl -u netwatch -f</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">5</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Re-identify devices that moved to new VLANs</h4>
+        <p>After the first scan, devices that moved to new VLANs will appear twice in the Devices
+        page — once as their old IP (showing Offline) and once as a new "Unknown (new IP)" entry.
+        Use the MAC address screenshot you took in Step 1 to match them up. Then:</p>
+        <p>— Rename the new "Unknown" entry to the device's real name</p>
+        <p>— Assign it to the correct profile</p>
+        <p>— Delete the old offline entry with the old IP</p>
+        <p>The dashboard updates immediately after each change.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-line"><div class="step-dot">6</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Update Pi-hole group names if they changed</h4>
+        <p>If you reorganised Pi-hole groups as part of the VLAN setup, go to
+        <strong>Users / Profiles</strong>, click each profile card, and update the
+        <strong>Pi-hole Group Name</strong> field to match the new group name.
+        The kill switch and per-profile blocked sites both use this field to find
+        the right Pi-hole group.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-line"><div class="step-dot">7</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Tighten CORS once VLANs are working</h4>
+        <p>Right now the backend accepts requests from any IP address (<code>CORS_ORIGINS = "*"</code>).
+        Once you have VLANs, you can restrict this to only your admin VLAN so devices on
+        the IoT or guest VLAN can't reach the dashboard API even if they can load the page.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">python</span><span class="code-file">netwatch_api.py — optional: tighten CORS to your admin VLAN only</span></div>
+<pre><span class="c"># BEFORE (open to everything):</span>
+CORS_ORIGINS = <span class="s">"*"</span>
+
+<span class="c"># AFTER (only your admin LAN and VPN can reach the API):</span>
+CORS_ORIGINS = [
+    <span class="s">"http://192.168.1.0/24"</span>,    <span class="c"># Main admin LAN</span>
+    <span class="s">"http://10.0.0.0/24"</span>,        <span class="c"># WireGuard VPN subnet</span>
+]</pre>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-dot">8</div><div class="step-connector"></div></div>
+      <div class="step-body">
+        <h4>Update the Pi-hole password if it changed</h4>
+        <p>If you changed your Pi-hole admin password during the VLAN setup, update it in the
+        systemd service file (not in <code>netwatch_api.py</code> directly — environment
+        variables are safer).</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><span class="code-lang">bash</span><span class="code-file">ubuntu server</span></div>
+<pre>sudo nano /etc/systemd/system/netwatch.service
+<span class="c"># Find the line: Environment=PIHOLE_V6_PASSWORD=...
+# Update the password, save, then:</span>
+sudo systemctl daemon-reload
+sudo systemctl restart netwatch
+
+<span class="c"># Confirm Pi-hole is still reachable with the new password:</span>
+curl http://localhost:5000/api/pihole/probe</pre>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-icon">💡</span>
+    <div><b>Test order that saves the most time:</b> Do Step 2 (config update) and Step 3 (firewall rules) before physically moving any devices into VLANs. That way the scanner is already watching the new subnets the moment the first device lands on them — you'll see it appear in the dashboard in real time rather than having to debug why it's not showing up.</div>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div><b>Wi-Fi name and password changes have no effect on NET-WATCH</b> — it operates at the IP/MAC layer, not the Wi-Fi credential layer. Change your SSID and password freely. The only side effect is devices temporarily losing their connection and getting new IPs from DHCP, which shows them as unknown until the next scan identifies them by MAC.</div>
+  </div>
+
+  <div class="checklist">
+    <div class="check-item" onclick="toggle(this)" data-key="s17-a">
+      <div class="check-box">✓</div>
+      <div class="check-label">Screenshot of Devices table with MAC addresses saved before starting</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s17-b">
+      <div class="check-box">✓</div>
+      <div class="check-label">SCAN_SUBNETS updated with one entry per VLAN</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s17-c">
+      <div class="check-box">✓</div>
+      <div class="check-label">Three firewall rules added per VLAN (server→VLAN, VLAN→server:80, server→Pi-hole:80)</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s17-d">
+      <div class="check-box">✓</div>
+      <div class="check-label">NET-WATCH restarted — devices appearing on new VLAN subnets</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s17-e">
+      <div class="check-box">✓</div>
+      <div class="check-label">Moved devices re-identified and reassigned to profiles</div>
+    </div>
+    <div class="check-item" onclick="toggle(this)" data-key="s17-f">
+      <div class="check-box">✓</div>
+      <div class="check-label">Pi-hole group names and password updated if they changed</div>
+    </div>
+  </div>
+</div>
+</div><!-- /s17 section -->
+
+
+</div><!-- /container -->
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="nav-btn" onclick="scrollToTop()">↑ Top</button>
+  <button class="nav-btn" onclick="document.querySelector('.toc').scrollIntoView({behavior:'smooth'})">☰ Menu</button>
+  <button class="nav-btn" onclick="prevSection()">← Prev</button>
+  <button class="nav-btn" onclick="nextSection()">Next →</button>
+</div>
+
+<script>
+const SECTIONS = ['s0','s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12','s13','s14','s15','s16','s17'];
+const STORAGE_KEY = 'netwatch-guide-v3';
+
+function getState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+function setState(s) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+}
+function toggle(el) {
+  const key = el.dataset.key;
+  if (!key) return;
+  const state = getState();
+  const done = !state[key];
+  state[key] = done;
+  setState(state);
+  el.classList.toggle('done', done);
+  el.querySelector('.check-box').textContent = done ? '✓' : '';
+  updateProgress();
+}
+function updateProgress() {
+  const state = getState();
+  const all  = document.querySelectorAll('.check-item[data-key]');
+  const done = [...all].filter(el => state[el.dataset.key]).length;
+  const pct  = all.length ? Math.round(done / all.length * 100) : 0;
+  document.getElementById('pbar').style.width   = pct + '%';
+  document.getElementById('plabel').textContent = done + ' / ' + all.length + ' done';
+}
+function initChecks() {
+  const state = getState();
+  document.querySelectorAll('.check-item[data-key]').forEach(el => {
+    const done = !!state[el.dataset.key];
+    el.classList.toggle('done', done);
+    el.querySelector('.check-box').textContent = done ? '✓' : '';
+  });
+  updateProgress();
+}
+function scrollToTop() { window.scrollTo({top:0,behavior:'smooth'}); }
+function getSectionEls() { return SECTIONS.map(id => document.getElementById(id)).filter(Boolean); }
+function getCurrentSectionIdx() {
+  const els = getSectionEls();
+  const mid = window.scrollY + window.innerHeight / 3;
+  let best = 0;
+  els.forEach((el,i) => { if (el.offsetTop <= mid) best = i; });
+  return best;
+}
+function nextSection() {
+  const els = getSectionEls();
+  const idx = Math.min(getCurrentSectionIdx() + 1, els.length - 1);
+  els[idx].scrollIntoView({behavior:'smooth',block:'start'});
+}
+function prevSection() {
+  const els = getSectionEls();
+  const idx = Math.max(getCurrentSectionIdx() - 1, 0);
+  els[idx].scrollIntoView({behavior:'smooth',block:'start'});
+}
+initChecks();
+</script>
+</body>
+</html>

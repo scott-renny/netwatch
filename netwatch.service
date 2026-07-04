@@ -1,0 +1,35 @@
+[Unit]
+Description=NET-WATCH Network Monitoring API
+# Start only after the network is fully up — the API needs to reach
+# Pi-hole and run arp-scan, so ordering matters
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Run as root because arp-scan needs raw socket access to send ARP packets.
+# If you prefer not to run as root, you can instead grant the specific
+# capability with: sudo setcap cap_net_raw=eip /usr/bin/arp-scan
+User=root
+WorkingDirectory=/opt/netwatch/api
+
+# The ExecStart path must be the full path to python3.
+# Confirm yours with: which python3
+ExecStart=/usr/bin/python3 netwatch_api.py
+
+# Restart automatically if the process crashes or is killed.
+# RestartSec gives it 5 seconds before trying again so a rapid crash
+# loop doesn't hammer the system.
+Restart=always
+RestartSec=5
+
+# Write stdout/stderr to the systemd journal.
+# View logs with: journalctl -u netwatch -f
+StandardOutput=journal
+StandardError=journal
+
+# Keep environment variables clean
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+# Start at boot, in the normal multi-user runlevel
+WantedBy=multi-user.target
