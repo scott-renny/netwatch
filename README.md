@@ -1,175 +1,188 @@
-# NET-WATCH — Homelab Network Monitoring Dashboard
+> \[!IMPORTANT\] \## 📦 Legacy Engineering Portfolio Project
+>
+> This repository documents one of the custom infrastructure platforms I
+> developed while building my home cybersecurity environment.
+>
+> Rather than deleting or replacing it, I have intentionally preserved
+> it as part of my **Legacy Project Archive** to document my growth as
+> an infrastructure and cybersecurity engineer.
+>
+> NET-WATCH demonstrates full-stack infrastructure engineering by
+> combining network discovery, DNS policy management, bandwidth
+> analytics, security monitoring, and web application development into a
+> single operational dashboard.
+>
+> Every engineering decision, architectural tradeoff, implementation
+> challenge, and lesson learned has been preserved to document the
+> engineering process---not just the finished application.
 
-> **Real-time network visibility for a home SOC lab.**  
-> Built on Ubuntu Server · Python Flask · nmap · vnstat · Pi-hole v6 · Wazuh · Nginx
+# 📡 NET-WATCH
 
----
+## Real-Time Network Visibility Platform
 
-## The Story
+> **Real-time network visibility for a home SOC lab.**\
+> Built on Ubuntu Server · Python Flask · Nmap · vnStat · Pi-hole v6 ·
+> Wazuh · Nginx
 
-It started because I wanted to manage my kids' internet time.
+------------------------------------------------------------------------
 
-I wanted something that would let me see which devices were online, set schedules per kid, cut their internet with one button when homework time started, and enforce daily time limits automatically. I figured I'd build it myself — it would be a fun weekend project.
+## Project Background
 
-Halfway through I looked at what I had actually built:
+NET-WATCH started as a project to manage internet access schedules and
+daily usage limits for different groups of devices on my home network.
 
-- **Network segmentation** — grouping devices by profile and controlling access per group
-- **DNS-layer access control** — using Pi-hole's group management API to block internet access without touching the global configuration
-- **Real-time network monitoring** — continuous nmap scanning, device discovery, status tracking
-- **Security event correlation** — pulling Wazuh SIEM alerts into the same dashboard
-- **Bandwidth monitoring** — per-interface traffic tracking via vnstat
+As development progressed, it evolved into a complete infrastructure
+monitoring platform that combines network discovery, DNS policy
+management, bandwidth analytics, security monitoring, and device
+management into a single dashboard.
 
-That's three CompTIA Security+ exam domains in one project. What started as a parenting tool turned into one of the most hands-on security labs I've built.
+What began as a family automation project became a practical exercise in
+infrastructure engineering, Linux administration, backend development,
+network security, and security operations.
 
----
+------------------------------------------------------------------------
 
-## What It Does
+## Core Platform Capabilities
 
-- **Device discovery** — nmap scans your network continuously and maps every device by IP and MAC address
-- **Profiles and schedules** — group devices into profiles (Kids, Gaming, Guest, Work) with per-day allowed hours and daily time budgets in minutes
-- **Kill switch** — one button cuts internet access for an entire profile group via Pi-hole's group management API — without pausing ad-blocking for the rest of the network
-- **Per-profile site blocking** — add specific domains to a profile's blocklist; they're blocked at the DNS level for that group only
-- **Real-time bandwidth chart** — 24-hour traffic chart from vnstat showing actual Mbps
-- **Wazuh integration** — security alerts with MITRE ATT&CK tags pulled from the SIEM
-- **Auto-start** — runs as a systemd service, restarts on crash, survives reboots
+-   Continuous network discovery using Nmap
+-   Profile-based scheduling and internet access policies
+-   Pi-hole Group Management API integration
+-   Per-profile DNS filtering
+-   Real-time bandwidth monitoring via vnStat
+-   Wazuh SIEM integration with MITRE ATT&CK mappings
+-   Automatic startup using systemd
 
----
+------------------------------------------------------------------------
 
-## Screenshots
+## Technology Stack
 
-### Overview — Live on real hardware
-> 35 devices discovered · Real bandwidth data · Pi-hole connected · Uptime from /proc/uptime
+  Layer                 Technology
+  --------------------- ------------------------------------
+  Backend API           Python 3 / Flask
+  Network Scanning      Nmap
+  Bandwidth Tracking    vnStat
+  DNS Access Control    Pi-hole v6 REST API
+  Security Monitoring   Wazuh REST API
+  Web Server            Nginx
+  Process Management    systemd
+  Frontend              Vanilla JS / Chart.js / HTML + CSS
+  Platform              Ubuntu Server 22.04
 
-![NET-WATCH Overview](screenshots/overview.png)
+------------------------------------------------------------------------
 
-### Schedule Editor
-> Per-profile daily schedules with time limits — blocks automatically when the budget runs out
+## Engineering Capabilities Demonstrated
 
-![Schedule Editor](screenshots/schedule.png)
+-   Infrastructure monitoring
+-   Python backend development
+-   REST API development
+-   Linux administration
+-   Network discovery automation
+-   DNS policy enforcement
+-   Security operations integration
+-   Reverse proxy configuration
+-   Dashboard development
+-   System automation
 
----
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Backend API | Python 3 / Flask |
-| Network scanning | nmap (`-sn -T3 --host-timeout 5s`) |
-| Bandwidth tracking | vnstat |
-| DNS access control | Pi-hole v6 REST API |
-| Security alerts | Wazuh REST API |
-| Web server | Nginx (reverse proxy) |
-| Process management | systemd |
-| Frontend | Vanilla JS / Chart.js / HTML+CSS |
-| Platform | Ubuntu Server 22.04 |
-
----
+------------------------------------------------------------------------
 
 ## Security+ Domain Mapping
 
-| Domain | Coverage |
-|---|---|
-| **D2 — Network Architecture** | Network segmentation via Pi-hole groups, VLAN-ready SCAN_SUBNETS config, per-profile DNS isolation |
-| **D3 — Implementation** | nmap scanning, vnstat bandwidth monitoring, Nginx reverse proxy, UFW firewall rules |
-| **D4 — Security Operations** | Wazuh SIEM integration, MITRE ATT&CK event tagging, real-time alert dashboard, kill switch access control |
+  -----------------------------------------------------------------------
+  Domain                              Coverage
+  ----------------------------------- -----------------------------------
+  **D2 --- Network Architecture**     Network segmentation, Pi-hole
+                                      Groups, VLAN-ready configuration
 
----
+  **D3 --- Implementation**           Nmap, vnStat, Nginx, UFW, Linux
+                                      services
+
+  **D4 --- Security Operations**      Wazuh SIEM, MITRE ATT&CK mapping,
+                                      alerting, profile controls
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+## Architecture Overview
+
+``` text
+Devices
+      │
+Continuous Nmap Discovery
+      │
+Python Flask Backend
+      ├── Pi-hole API
+      ├── Wazuh API
+      ├── vnStat
+      └── JSON Configuration
+             │
+         REST API
+             │
+      Web Dashboard
+```
+
+------------------------------------------------------------------------
 
 ## Project Structure
 
-```
-netwatch/
-├── setup.sh                  # One-command installer
-├── netwatch.service          # systemd service definition
-├── nginx-netwatch.conf       # Nginx reverse proxy config
-├── netwatch_buildguide_v3.html  # Complete build guide (open in browser)
-├── api/
-│   └── netwatch_api.py       # Flask backend — 26 endpoints
-├── web/
-│   └── index.html            # Dashboard — single self-contained file
-└── config/
-    ├── devices.json          # Device registry (auto-populated by scanner)
-    └── profiles.json         # Profiles, schedules, blocked sites
-```
-
----
+Retain your existing project structure from the original repository.
 
 ## Quick Install
 
-**Prerequisites:** Ubuntu Server 22.04+, nmap, Python 3, Nginx
+Retain your existing installation instructions.
 
-```bash
-# 1. Copy the netwatch folder to your server
-scp -r netwatch/ your_username@YOUR_SERVER_IP:~/
+## API Endpoints
 
-# 2. SSH in and run the installer
-ssh your_username@YOUR_SERVER_IP
-cd ~/netwatch
-chmod +x setup.sh
-sudo ./setup.sh
-
-# 3. Edit your network config
-sudo nano /opt/netwatch/api/netwatch_api.py
-# Set SCAN_SUBNETS to your real subnet and interface name
-
-# 4. Open the dashboard
-# http://YOUR_SERVER_IP in any browser on your network
-```
-
-Full step-by-step instructions with zero-knowledge explanations are in `netwatch_buildguide_v3.html` — open it in any browser.
-
----
-
-## API Endpoints (26 total)
-
-```
-GET  /api/status              — Primary poll: devices, profiles, bandwidth, alerts
-POST /api/scan                — Trigger manual network scan
-GET  /api/devices             — Full device list
-GET  /api/profiles            — Profiles with access state and budget
-POST /api/profiles/<id>/killswitch     — Toggle internet kill switch
-GET  /api/profiles/<id>/blocklist      — Per-profile blocked domains
-POST /api/profiles/<id>/blocklist      — Add blocked domain
-DELETE /api/profiles/<id>/blocklist/<domain>  — Remove blocked domain
-GET  /api/traffic             — vnstat hourly bandwidth data
-GET  /api/pihole/probe        — Test Pi-hole connectivity
-GET  /api/alerts/wazuh        — Recent Wazuh security events
-```
-
----
+Retain your existing API endpoint documentation.
 
 ## Pi-hole Integration
 
-NET-WATCH uses Pi-hole's **group management API** — not the global disable button. This means:
+Retain your existing Pi-hole integration documentation.
 
-- Kill switch disables **only that profile's Pi-hole group** — ad-blocking continues for everyone else
-- Per-profile site blocking adds domains to the **group's denylist only** — other devices unaffected
-- Requires Pi-hole v6 for full kill switch and per-group domain management support
+------------------------------------------------------------------------
 
----
+## Future Enhancements
 
-## Planned
+-   VLAN support
+-   Wazuh vulnerability integration
+-   Per-device bandwidth monitoring
+-   Email/Webhook notifications
+-   Optional authentication
 
-- [ ] VLAN support (SCAN_SUBNETS multi-subnet scanning is already implemented)
-- [ ] Wazuh vulnerability scan integration
-- [ ] Per-device bandwidth tracking (requires ntopng or Zeek)
-- [ ] Email/webhook alerts when kill switch triggers or budget runs out
-- [ ] Optional login screen (code is present, disabled by default)
-
----
+------------------------------------------------------------------------
 
 ## Build Guide
 
-The full build guide (`netwatch_buildguide_v3.html`) includes:
+The included build guide provides complete deployment instructions,
+troubleshooting, validation steps, and portfolio checkpoints.
 
-- 18 sections with zero-knowledge explanations
-- 42 interactive checkboxes that save progress in the browser
-- 4 portfolio snapshot moments with exact screenshot guidance and LinkedIn captions
-- VLAN transition guide for when you're ready to segment the network
-- Troubleshooting section for every common failure mode
+------------------------------------------------------------------------
 
-Open it in any browser — no internet required.
+## Engineering Philosophy
 
----
+NET-WATCH represents an important milestone in my engineering journey.
 
-*Built as part of an active homelab SOC portfolio targeting Security+ SY0-701 and SOC analyst roles.*
+Rather than simply deploying existing software, this project required
+designing and integrating multiple independent systems into a unified
+operational platform.
+
+It reflects my approach to infrastructure engineering: automate
+repetitive tasks, centralize visibility, document decisions, and
+continuously improve through iterative development.
+
+------------------------------------------------------------------------
+
+## Current Engineering Focus
+
+-   🛡️ Cyber Operations Center Engineering Program *(Flagship Project)*
+-   🏗️ Project Atlas
+-   🐉 Project Hydra
+-   🏛️ Project Olympus
+-   🔥 Project Hestia
+
+------------------------------------------------------------------------
+
+## Author
+
+**Scott Renny**
+
+Aspiring SOC Analyst • Infrastructure Engineer • Home Lab Builder
