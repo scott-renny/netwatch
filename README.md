@@ -1,4 +1,5 @@
-> \[!IMPORTANT\] \## 📦 Legacy Engineering Portfolio Project
+> [!IMPORTANT]
+> ## 📦 Legacy Engineering Portfolio Project
 >
 > This repository documents one of the custom infrastructure platforms I
 > developed while building my home cybersecurity environment.
