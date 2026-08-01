@@ -29,6 +29,21 @@ StandardError=journal
 
 # Keep environment variables clean
 Environment=PYTHONUNBUFFERED=1
+Environment=NETWATCH_BIND=127.0.0.1
+Environment=NETWATCH_PORT=8082
+EnvironmentFile=/etc/netwatch/netwatch.env
+
+# Limit what a compromised dashboard process can reach or modify.
+UMask=0077
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/netwatch/config
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
 
 [Install]
 # Start at boot, in the normal multi-user runlevel
