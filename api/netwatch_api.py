@@ -16,9 +16,17 @@ import json, os, re, subprocess, threading, uuid, datetime, hmac
 app = Flask(__name__)
 app.secret_key        = os.environ.get("NETWATCH_SECRET", "change-me-set-NETWATCH_SECRET-env-var")
 app.permanent_session_lifetime = datetime.timedelta(hours=24)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Strict",
+    SESSION_COOKIE_SECURE=os.environ.get("NETWATCH_HTTPS", "false").lower() == "true",
+)
 
-CORS_ORIGINS = "*"
-CORS(app, origins=CORS_ORIGINS, supports_credentials=True)
+# The dashboard and API are served by the same Nginx origin. CORS stays
+# disabled by default; explicitly set NETWATCH_CORS_ORIGIN only if needed.
+CORS_ORIGIN = os.environ.get("NETWATCH_CORS_ORIGIN", "")
+if CORS_ORIGIN:
+    CORS(app, origins=[CORS_ORIGIN], supports_credentials=True)
 
 BASE_DIR      = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR    = os.path.join(BASE_DIR, "..", "config")
