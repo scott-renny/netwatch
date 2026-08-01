@@ -8,7 +8,7 @@ Generate secret key: python3 -c "import secrets; print(secrets.token_hex(32))"
 """
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
-import json, os, re, subprocess, threading, uuid, datetime
+import json, os, re, subprocess, threading, uuid, datetime, hmac
 
 # ══════════════════════════════════════════════════════
 #  SETUP
@@ -31,10 +31,42 @@ PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
 #  Default is "netwatch" — change it.
 # ══════════════════════════════════════════════════════
 
-# Auth disabled — all endpoints open
+NETWATCH_PASSWORD = os.environ.get("NETWATCH_PASSWORD", "")
+if not NETWATCH_PASSWORD:
+    raise RuntimeError("NETWATCH_PASSWORD must be set before NET-WATCH can start")
+if app.secret_key == "change-me-set-NETWATCH_SECRET-env-var":
+    raise RuntimeError("NETWATCH_SECRET must be set to a strong random value")
 
+@app.post("/api/auth/login")
+def auth_login():
+    supplied = (request.get_json(silent=True) or {}).get("password", "")
+    if not isinstance(supplied, str) or not hmac.compare_digest(supplied, NETWATCH_PASSWORD):
+        return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+    session.clear()
+    session.permanent = True
+    session["authenticated"] = True
+    return jsonify({"ok": True})
 
+@app.post("/api/auth/logout")
+def auth_logout():
+    session.clear()
+    return jsonify({"ok": True})
 
+@app.get("/api/auth/status")
+def auth_status():
+    return jsonify({"authenticated": bool(session.get("authenticated"))})
+
+@app.before_request
+def require_authentication():
+    if request.path in {"/api/auth/login", "/api/auth/logout", "/api/auth/status", "/api/health"}:
+        return None
+    if request.path.startswith("/api/") and not session.get("authenticated"):
+        return jsonify({"error": "Authentication required"}), 401
+    return None
+
+@app.get("/api/health")
+def health():
+    return jsonify({"ok": True, "service": "netwatch"})
 
 # ══════════════════════════════════════════════════════
 #  PI-HOLE CLIENT (v5 + v6 auto-detect)
@@ -473,8 +505,23 @@ def vnstat_today(interface=None):
 #  For now "*" means any device on any subnet can reach the API.
 # ════════════════════════════════════════════════════════════════════
 
-SCAN_SUBNETS        = [{"subnet": "192.168.1.0/24", "interface": "eth0"}]
-AUTO_SCAN_INTERVAL  = 300  # 5 minutes — gentler on Wi-Fi
+def _load_scan_subnets():
+    raw = os.environ.get("SCAN_SUBNETS_JSON", "")
+    if not raw:
+        return [{"subnet": "192.168.1.0/24", "interface": "eth0"}]
+    try:
+        value = json.loads(raw)
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty JSON list")
+        for item in value:
+            if not isinstance(item, dict) or not item.get("subnet") or not item.get("interface"):
+                raise ValueError("each entry requires subnet and interface")
+        return value
+    except Exception as exc:
+        raise RuntimeError(f"Invalid SCAN_SUBNETS_JSON: {exc}") from exc
+
+SCAN_SUBNETS        = _load_scan_subnets()
+AUTO_SCAN_INTERVAL  = int(os.environ.get("AUTO_SCAN_INTERVAL", "300"))  # 5 minutes — gentler on Wi-Fi
 USAGE_TICK_INTERVAL = 60   # seconds between per-profile usage ticks
 
 # ════════════════════════════════════════════════════════════════════
@@ -1643,9 +1690,11 @@ if __name__ == "__main__":
     # Auto-scan disabled — scanning on Wi-Fi can drop the interface.
     # Use the Scan Network button in the dashboard instead.
     # To re-enable: remove the # from the line below.
-    #threading.Thread(target=_scan_loop,  daemon=True, name="scan").start()
+    threading.Thread(target=_scan_loop,  daemon=True, name="scan").start()
     threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
     print("  Background threads: scan + usage started")
     print("  Dashboard URL    :  http://<server-ip>")
     print("─────────────────────────────────────────────────────\n")
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    app.run(host=os.environ.get("NETWATCH_BIND", "127.0.0.1"),
+            port=int(os.environ.get("NETWATCH_PORT", "8082")),
+            debug=False, threaded=True)
