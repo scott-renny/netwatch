@@ -80,7 +80,7 @@ info "Running apt update..."
 apt-get update -qq
 
 PACKAGES=""
-for pkg in nmap arp-scan nginx python3-pip; do
+for pkg in nmap arp-scan nginx vnstat python3-pip; do
     if dpkg -s "$pkg" &>/dev/null; then
         ok "$pkg is already installed"
     else
@@ -104,7 +104,8 @@ for lib in flask flask-cors requests; do
         ok "$lib already installed"
     else
         info "Installing $lib..."
-        pip3 install "$lib" -q 2>/dev/null || pip3 install "$lib" --break-system-packages -q 2>/dev/null || true
+        pip3 install "$lib" -q 2>/dev/null || pip3 install "$lib" --break-system-packages -q
+        python3 -c "import ${lib//-/_}" &>/dev/null || fail "$lib installation failed"
         ok "$lib installed"
     fi
 done
@@ -147,7 +148,37 @@ chmod 755 /opt/netwatch/api/netwatch_api.py
 ok "Files installed to /opt/netwatch"
 
 # ── 6. Install and start the systemd service ─────────────
-step "STEP 5 — Setting up the NET-WATCH service (auto-start on boot)"
+step "STEP 5 — Creating protected runtime configuration"
+
+mkdir -p /etc/netwatch
+chmod 700 /etc/netwatch
+
+if [ ! -f /etc/netwatch/netwatch.env ]; then
+    NETWATCH_PASSWORD_VALUE="${NETWATCH_PASSWORD:-}"
+    if [ -z "$NETWATCH_PASSWORD_VALUE" ] && [ -t 0 ]; then
+        read -r -s -p "  Enter a strong NET-WATCH dashboard password: " NETWATCH_PASSWORD_VALUE
+        echo
+    fi
+    [ -n "$NETWATCH_PASSWORD_VALUE" ] || fail "Set NETWATCH_PASSWORD or run setup interactively"
+    NETWATCH_SECRET_VALUE="${NETWATCH_SECRET:-$(python3 -c 'import secrets; print(secrets.token_hex(32))')}"
+    PRIMARY_IF=$(ip route show default | awk 'NR==1 {print $5}')
+    PRIMARY_CIDR=$(ip -o -4 route show dev "$PRIMARY_IF" proto kernel scope link | awk 'NR==1 {print $1}')
+    [ -n "$PRIMARY_IF" ] && [ -n "$PRIMARY_CIDR" ] || fail "Could not detect the primary interface/subnet"
+    {
+        printf 'NETWATCH_PASSWORD=%s\n' "$NETWATCH_PASSWORD_VALUE"
+        printf 'NETWATCH_SECRET=%s\n' "$NETWATCH_SECRET_VALUE"
+        printf 'SCAN_SUBNETS_JSON=[{"subnet":"%s","interface":"%s"}]\n' "$PRIMARY_CIDR" "$PRIMARY_IF"
+        printf 'PIHOLE_ENABLED=false\n'
+        printf 'WAZUH_ENABLED=false\n'
+    } > /etc/netwatch/netwatch.env
+    chmod 600 /etc/netwatch/netwatch.env
+    ok "Protected config created at /etc/netwatch/netwatch.env"
+else
+    ok "Protected config already exists — keeping existing secrets and network settings"
+fi
+systemctl enable --now vnstat
+
+step "STEP 6 — Setting up the NET-WATCH service (auto-start on boot)"
 
 # If the service is already running, stop it before overwriting
 if systemctl is-active --quiet netwatch 2>/dev/null; then
@@ -242,6 +273,6 @@ echo ""
 echo -e "  ${BOLD}Next steps:${RESET}"
 echo -e "  1. Open the dashboard and go to ${CYAN}Settings${RESET}"
 echo -e "  2. Set your Pi-hole IP and password in netwatch_api.py"
-echo -e "  3. Run ${CYAN}curl http://localhost:5000/api/pihole/probe${RESET} to verify"
+echo -e "  3. Run ${CYAN}curl http://localhost:8082/api/health${RESET} to verify"
 echo -e "  4. Set PIHOLE_ENABLED = True and restart the service"
 echo ""
