@@ -115,9 +115,9 @@ fi
 
 info "Installing/updating Flask dependencies in the isolated environment..."
 /opt/netwatch/venv/bin/python -m pip install --upgrade pip -q
-/opt/netwatch/venv/bin/python -m pip install --upgrade flask flask-cors requests -q
+/opt/netwatch/venv/bin/python -m pip install --upgrade flask flask-cors requests gunicorn -q
 
-for lib in flask flask_cors requests; do
+for lib in flask flask_cors requests gunicorn; do
     /opt/netwatch/venv/bin/python -c "import $lib" &>/dev/null || fail "$lib installation failed"
 done
 ok "Python environment ready at /opt/netwatch/venv"
