@@ -39,14 +39,18 @@ PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
 #  Default is "netwatch" — change it.
 # ══════════════════════════════════════════════════════
 
+AUTH_ENABLED = os.environ.get("NETWATCH_AUTH_ENABLED", "true").lower() == "true"
 NETWATCH_PASSWORD = os.environ.get("NETWATCH_PASSWORD", "")
-if not NETWATCH_PASSWORD:
-    raise RuntimeError("NETWATCH_PASSWORD must be set before NET-WATCH can start")
+if AUTH_ENABLED and not NETWATCH_PASSWORD:
+    raise RuntimeError("NETWATCH_PASSWORD must be set when authentication is enabled")
 if app.secret_key == "change-me-set-NETWATCH_SECRET-env-var":
     raise RuntimeError("NETWATCH_SECRET must be set to a strong random value")
 
 @app.post("/api/auth/login")
 def auth_login():
+    if not AUTH_ENABLED:
+        session["authenticated"] = True
+        return jsonify({"ok": True, "auth_enabled": False})
     supplied = (request.get_json(silent=True) or {}).get("password", "")
     if not isinstance(supplied, str) or not hmac.compare_digest(supplied, NETWATCH_PASSWORD):
         return jsonify({"ok": False, "error": "Invalid credentials"}), 401
@@ -62,10 +66,15 @@ def auth_logout():
 
 @app.get("/api/auth/status")
 def auth_status():
-    return jsonify({"authenticated": bool(session.get("authenticated"))})
+    return jsonify({
+        "auth_enabled": AUTH_ENABLED,
+        "authenticated": (not AUTH_ENABLED) or bool(session.get("authenticated")),
+    })
 
 @app.before_request
 def require_authentication():
+    if not AUTH_ENABLED:
+        return None
     if request.path in {"/api/auth/login", "/api/auth/logout", "/api/auth/status", "/api/health"}:
         return None
     if request.path.startswith("/api/") and not session.get("authenticated"):
@@ -1685,7 +1694,7 @@ def initialize_runtime():
         warnings.filterwarnings("ignore")
 
         print("\n── NET-WATCH API v3.1 ───────────────────────────────")
-        print("  Auth             : enabled (session protected)")
+        print(f"  Auth             : {'enabled (session protected)' if AUTH_ENABLED else 'disabled by NETWATCH_AUTH_ENABLED'}")
         print(f"  Pi-hole          : {'enabled — ' + PIHOLE_HOST if PIHOLE_ENABLED else 'disabled (set PIHOLE_ENABLED=true)'}")
         print(f"  Wazuh            : {'enabled — ' + WAZUH_URL if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
         print(f"  Scan subnets     : {[s['subnet'] for s in SCAN_SUBNETS]}")
