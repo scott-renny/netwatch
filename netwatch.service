@@ -14,7 +14,10 @@ WorkingDirectory=/opt/netwatch/api
 
 # The ExecStart path must be the full path to python3.
 # Confirm yours with: which python3
-ExecStart=/opt/netwatch/venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:8082 --timeout 120 --access-logfile - --error-logfile - netwatch_api:app
+RuntimeDirectory=netwatch
+RuntimeDirectoryMode=0750
+ExecStartPre=/usr/bin/mkdir -p /run/netwatch/.gunicorn
+ExecStart=/opt/netwatch/venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:8082 --timeout 120 --worker-tmp-dir /run/netwatch --access-logfile - --error-logfile - netwatch_api:app
 
 # Restart automatically if the process crashes or is killed.
 # RestartSec gives it 5 seconds before trying again so a rapid crash
@@ -29,6 +32,7 @@ StandardError=journal
 
 # Keep environment variables clean
 Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/run/netwatch
 Environment=NETWATCH_BIND=127.0.0.1
 Environment=NETWATCH_PORT=8082
 EnvironmentFile=/etc/netwatch/netwatch.env
