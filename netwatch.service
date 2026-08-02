@@ -14,7 +14,7 @@ WorkingDirectory=/opt/netwatch/api
 
 # The ExecStart path must be the full path to python3.
 # Confirm yours with: which python3
-ExecStart=/usr/bin/python3 netwatch_api.py
+ExecStart=/opt/netwatch/venv/bin/python /opt/netwatch/api/netwatch_api.py
 
 # Restart automatically if the process crashes or is killed.
 # RestartSec gives it 5 seconds before trying again so a rapid crash
