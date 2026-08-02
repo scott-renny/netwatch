@@ -80,7 +80,7 @@ info "Running apt update..."
 apt-get update -qq
 
 PACKAGES=""
-for pkg in nmap arp-scan nginx vnstat python3-pip; do
+for pkg in nmap arp-scan nginx vnstat python3-venv; do
     if dpkg -s "$pkg" &>/dev/null; then
         ok "$pkg is already installed"
     else
@@ -99,16 +99,20 @@ fi
 # ── 4. Install Python libraries ───────────────────────────
 step "STEP 3 — Installing Python libraries"
 
-for lib in flask flask-cors requests; do
-    if python3 -c "import ${lib//-/_}" &>/dev/null; then
-        ok "$lib already installed"
-    else
-        info "Installing $lib..."
-        pip3 install "$lib" -q 2>/dev/null || pip3 install "$lib" --break-system-packages -q
-        python3 -c "import ${lib//-/_}" &>/dev/null || fail "$lib installation failed"
-        ok "$lib installed"
-    fi
+mkdir -p /opt/netwatch
+if [ ! -x /opt/netwatch/venv/bin/python ]; then
+    info "Creating isolated Python environment..."
+    python3 -m venv /opt/netwatch/venv
+fi
+
+info "Installing/updating Flask dependencies in the isolated environment..."
+/opt/netwatch/venv/bin/python -m pip install --upgrade pip -q
+/opt/netwatch/venv/bin/python -m pip install --upgrade flask flask-cors requests -q
+
+for lib in flask flask_cors requests; do
+    /opt/netwatch/venv/bin/python -c "import $lib" &>/dev/null || fail "$lib installation failed"
 done
+ok "Python environment ready at /opt/netwatch/venv"
 
 # ── 5. Copy project files to /opt/netwatch ───────────────
 step "STEP 4 — Installing NET-WATCH files to /opt/netwatch"
