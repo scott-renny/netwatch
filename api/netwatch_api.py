@@ -9,6 +9,7 @@ Generate secret key: python3 -c "import secrets; print(secrets.token_hex(32))"
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 import json, os, re, subprocess, threading, uuid, datetime, hmac
+from collections import deque
 
 # ══════════════════════════════════════════════════════
 #  SETUP
@@ -376,47 +377,68 @@ def _wazuh_get(path, params=None):
                       params=params, verify=False, timeout=10)
     r.raise_for_status(); return r.json()
 
-def wazuh_recent_events(limit=10, min_level=5):
-    if not WAZUH_ENABLED: return []
+WAZUH_ALERTS_FILE = os.environ.get(
+    "WAZUH_ALERTS_FILE", "/var/ossec/logs/alerts/alerts.json"
+)
+
+def _local_wazuh_alerts(max_lines=50000):
+    """Read recent JSON alerts locally without exposing Indexer credentials."""
+    if not WAZUH_ENABLED or not os.path.isfile(WAZUH_ALERTS_FILE):
+        return []
     try:
-        data = _wazuh_get("/alerts", params={"level": min_level, "limit": limit, "sort": "-timestamp"})
-        return [{"time":   e.get("timestamp","")[:19].replace("T"," "),
-                 "rule":   e.get("rule",{}).get("description",""),
-                 "level":  e.get("rule",{}).get("level", 0),
-                 "agent":  e.get("agent",{}).get("name","?"),
-                 "mitre":  ", ".join(e.get("rule",{}).get("mitre",{}).get("technique",["—"]))}
-                for e in data.get("data",{}).get("affected_items",[])]
-    except Exception:
+        with open(WAZUH_ALERTS_FILE, "r", encoding="utf-8", errors="replace") as fh:
+            lines = deque(fh, maxlen=max_lines)
+        alerts = []
+        for line in lines:
+            try:
+                alerts.append(json.loads(line))
+            except (TypeError, ValueError):
+                continue
+        return alerts
+    except OSError:
         return []
 
+def wazuh_recent_events(limit=10, min_level=5):
+    alerts = [
+        event for event in _local_wazuh_alerts()
+        if int(event.get("rule", {}).get("level", 0) or 0) >= min_level
+    ]
+    alerts.sort(key=lambda event: event.get("timestamp", ""), reverse=True)
+    return [{
+        "time": event.get("timestamp", "")[:19].replace("T", " "),
+        "rule": event.get("rule", {}).get("description", ""),
+        "level": event.get("rule", {}).get("level", 0),
+        "agent": event.get("agent", {}).get("name", "?"),
+        "mitre": ", ".join(
+            event.get("rule", {}).get("mitre", {}).get("technique", ["—"])
+        ),
+    } for event in alerts[:limit]]
+
 def wazuh_counts_7d():
-    """Per-day alert severity buckets for the last 7 days."""
-    if not WAZUH_ENABLED:
-        return []
-    result = []
+    """Per-day severity buckets from the local Wazuh JSON alert stream."""
     today = datetime.date.today()
+    buckets = {}
+    for days_ago in range(7):
+        day = today - datetime.timedelta(days=days_ago)
+        buckets[day.isoformat()] = {"critical": 0, "high": 0, "medium": 0}
+
+    for event in _local_wazuh_alerts():
+        day = event.get("timestamp", "")[:10]
+        if day not in buckets:
+            continue
+        level = int(event.get("rule", {}).get("level", 0) or 0)
+        if level >= 12:
+            buckets[day]["critical"] += 1
+        elif level >= 9:
+            buckets[day]["high"] += 1
+        elif level >= 5:
+            buckets[day]["medium"] += 1
+
+    result = []
     for days_ago in range(6, -1, -1):
-        d = today - datetime.timedelta(days=days_ago)
-        label = d.strftime("%a")
-        crit = high = med = 0
-        try:
-            start = f"{d.isoformat()}T00:00:00"
-            end   = f"{d.isoformat()}T23:59:59"
-            data  = _wazuh_get("/alerts",
-                                params={"level": "12", "limit": 1,
-                                        "q": f"timestamp>{start};timestamp<{end}"})
-            crit = data.get("data", {}).get("total_affected_items", 0)
-            data  = _wazuh_get("/alerts",
-                                params={"level": "9", "limit": 1,
-                                        "q": f"timestamp>{start};timestamp<{end}"})
-            high = max(0, data.get("data", {}).get("total_affected_items", 0) - crit)
-            data  = _wazuh_get("/alerts",
-                                params={"level": "5", "limit": 1,
-                                        "q": f"timestamp>{start};timestamp<{end}"})
-            med = max(0, data.get("data", {}).get("total_affected_items", 0) - crit - high)
-        except Exception:
-            pass
-        result.append({"date": label, "critical": crit, "high": high, "medium": med})
+        day = today - datetime.timedelta(days=days_ago)
+        counts = buckets[day.isoformat()]
+        result.append({"date": day.strftime("%a"), **counts})
     return result
 
 # ══════════════════════════════════════════════════════
@@ -1286,8 +1308,11 @@ def get_dns_stats():
 def get_wazuh_alerts():
     limit     = int(request.args.get("limit", 10))
     min_level = int(request.args.get("level", 5))
-    return jsonify({"events":wazuh_recent_events(limit, min_level),
-                    "available":WAZUH_ENABLED})
+    return jsonify({
+        "events": wazuh_recent_events(limit, min_level),
+        "available": WAZUH_ENABLED and os.path.isfile(WAZUH_ALERTS_FILE),
+        "source": "local_alerts_file",
+    })
 
 @app.route("/api/alerts/counts", methods=["GET"])
 def get_alert_counts():
@@ -1696,7 +1721,7 @@ def initialize_runtime():
         print("\n── NET-WATCH API v3.1 ───────────────────────────────")
         print(f"  Auth             : {'enabled (session protected)' if AUTH_ENABLED else 'disabled by NETWATCH_AUTH_ENABLED'}")
         print(f"  Pi-hole          : {'enabled — ' + PIHOLE_HOST if PIHOLE_ENABLED else 'disabled (set PIHOLE_ENABLED=true)'}")
-        print(f"  Wazuh            : {'enabled — ' + WAZUH_URL if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
+        print(f"  Wazuh            : {'enabled — local alerts file' if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
         print(f"  Scan subnets     : {[s['subnet'] for s in SCAN_SUBNETS]}")
         print(f"  Scan interval    : {AUTO_SCAN_INTERVAL}s | Usage tick: {USAGE_TICK_INTERVAL}s")
 
