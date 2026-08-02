@@ -80,7 +80,15 @@ info "Running apt update..."
 apt-get update -qq
 
 PACKAGES=""
-for pkg in nmap arp-scan nginx python3-pip; do
+CADDY_ACTIVE=false
+if command -v caddy &>/dev/null && systemctl is-active --quiet caddy; then
+    CADDY_ACTIVE=true
+    REQUIRED_PACKAGES="nmap arp-scan vnstat python3-venv"
+    ok "Active Caddy installation detected — preserving it"
+else
+    REQUIRED_PACKAGES="nmap arp-scan nginx vnstat python3-venv"
+fi
+for pkg in $REQUIRED_PACKAGES; do
     if dpkg -s "$pkg" &>/dev/null; then
         ok "$pkg is already installed"
     else
@@ -99,15 +107,20 @@ fi
 # ── 4. Install Python libraries ───────────────────────────
 step "STEP 3 — Installing Python libraries"
 
-for lib in flask flask-cors requests; do
-    if python3 -c "import ${lib//-/_}" &>/dev/null; then
-        ok "$lib already installed"
-    else
-        info "Installing $lib..."
-        pip3 install "$lib" -q 2>/dev/null || pip3 install "$lib" --break-system-packages -q 2>/dev/null || true
-        ok "$lib installed"
-    fi
+mkdir -p /opt/netwatch
+if [ ! -x /opt/netwatch/venv/bin/python ]; then
+    info "Creating isolated Python environment..."
+    python3 -m venv /opt/netwatch/venv
+fi
+
+info "Installing/updating Flask dependencies in the isolated environment..."
+/opt/netwatch/venv/bin/python -m pip install --upgrade pip -q
+/opt/netwatch/venv/bin/python -m pip install --upgrade flask flask-cors requests gunicorn -q
+
+for lib in flask flask_cors requests gunicorn; do
+    /opt/netwatch/venv/bin/python -c "import $lib" &>/dev/null || fail "$lib installation failed"
 done
+ok "Python environment ready at /opt/netwatch/venv"
 
 # ── 5. Copy project files to /opt/netwatch ───────────────
 step "STEP 4 — Installing NET-WATCH files to /opt/netwatch"
@@ -147,7 +160,39 @@ chmod 755 /opt/netwatch/api/netwatch_api.py
 ok "Files installed to /opt/netwatch"
 
 # ── 6. Install and start the systemd service ─────────────
-step "STEP 5 — Setting up the NET-WATCH service (auto-start on boot)"
+step "STEP 5 — Creating protected runtime configuration"
+
+mkdir -p /etc/netwatch
+chmod 700 /etc/netwatch
+
+if [ ! -f /etc/netwatch/netwatch.env ]; then
+    NETWATCH_PASSWORD_VALUE="${NETWATCH_PASSWORD:-}"
+    if [ -z "$NETWATCH_PASSWORD_VALUE" ] && [ -t 0 ]; then
+        read -r -s -p "  Enter a strong NET-WATCH dashboard password: " NETWATCH_PASSWORD_VALUE
+        echo
+    fi
+    [ -n "$NETWATCH_PASSWORD_VALUE" ] || fail "Set NETWATCH_PASSWORD or run setup interactively"
+    NETWATCH_SECRET_VALUE="${NETWATCH_SECRET:-$(python3 -c 'import secrets; print(secrets.token_hex(32))')}"
+    PRIMARY_IF=$(ip route show default | awk 'NR==1 {print $5}')
+    PRIMARY_CIDR=$(ip -o -4 route show dev "$PRIMARY_IF" proto kernel scope link | awk 'NR==1 {print $1}')
+    [ -n "$PRIMARY_IF" ] && [ -n "$PRIMARY_CIDR" ] || fail "Could not detect the primary interface/subnet"
+    {
+        printf 'NETWATCH_PASSWORD=%s\n' "$NETWATCH_PASSWORD_VALUE"
+        printf 'NETWATCH_SECRET=%s\n' "$NETWATCH_SECRET_VALUE"
+        printf 'NETWATCH_AUTH_ENABLED=true\n'
+        printf 'TZ=America/Toronto\n'
+        printf 'SCAN_SUBNETS_JSON=[{"subnet":"%s","interface":"%s"}]\n' "$PRIMARY_CIDR" "$PRIMARY_IF"
+        printf 'PIHOLE_ENABLED=false\n'
+        printf 'WAZUH_ENABLED=false\n'
+    } > /etc/netwatch/netwatch.env
+    chmod 600 /etc/netwatch/netwatch.env
+    ok "Protected config created at /etc/netwatch/netwatch.env"
+else
+    ok "Protected config already exists — keeping existing secrets and network settings"
+fi
+systemctl enable --now vnstat
+
+step "STEP 6 — Setting up the NET-WATCH service (auto-start on boot)"
 
 # If the service is already running, stop it before overwriting
 if systemctl is-active --quiet netwatch 2>/dev/null; then
@@ -170,33 +215,33 @@ else
     fail "Service failed to start. Fix the error above and re-run this script."
 fi
 
-# ── 7. Install and enable the Nginx config ───────────────
-step "STEP 6 — Configuring Nginx web server"
+# ── 7. Configure the existing web server ─────────────────
+step "STEP 6 — Configuring web server"
 
-cp -f "$SCRIPT_DIR/nginx-netwatch.conf" /etc/nginx/sites-available/netwatch
-
-# Enable the site (create symlink) only if it doesn't already exist
-if [ ! -L /etc/nginx/sites-enabled/netwatch ]; then
-    ln -s /etc/nginx/sites-available/netwatch /etc/nginx/sites-enabled/netwatch
-    ok "Nginx site enabled"
+if [ "$CADDY_ACTIVE" = true ]; then
+    cp -f /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.netwatch-backup-$(date +%Y%m%d%H%M%S)"
+    cp -f "$SCRIPT_DIR/caddy-netwatch.conf" /etc/caddy/netwatch.Caddyfile
+    caddy fmt --overwrite /etc/caddy/netwatch.Caddyfile
+    if ! grep -Fqx 'import /etc/caddy/netwatch.Caddyfile' /etc/caddy/Caddyfile; then
+        printf '\nimport /etc/caddy/netwatch.Caddyfile\n' >> /etc/caddy/Caddyfile
+    fi
+    if caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+        systemctl reload caddy
+        ok "Caddy reloaded with NET-WATCH at https://netwatch.coc-srv-01.home.arpa"
+    else
+        fail "Caddy validation failed; restore the timestamped Caddyfile backup"
+    fi
 else
-    ok "Nginx site link already exists"
-fi
-
-# Remove the default Nginx welcome page so NET-WATCH loads at /
-if [ -L /etc/nginx/sites-enabled/default ]; then
-    rm /etc/nginx/sites-enabled/default
-    info "Removed default Nginx page (NET-WATCH will now load at the root URL)"
-fi
-
-# Test the Nginx config before reloading
-if nginx -t &>/dev/null; then
-    systemctl reload nginx
-    ok "Nginx reloaded with NET-WATCH config"
-else
-    warn "Nginx config test failed — showing error:"
-    nginx -t
-    fail "Fix the Nginx config error above and re-run."
+    cp -f "$SCRIPT_DIR/nginx-netwatch.conf" /etc/nginx/sites-available/netwatch
+    ln -sf /etc/nginx/sites-available/netwatch /etc/nginx/sites-enabled/netwatch
+    rm -f /etc/nginx/sites-enabled/default
+    if nginx -t; then
+        systemctl enable --now nginx
+        systemctl reload nginx
+        ok "Nginx reloaded with NET-WATCH config"
+    else
+        fail "Nginx configuration test failed"
+    fi
 fi
 
 # ── 8. Firewall ───────────────────────────────────────────
@@ -204,8 +249,9 @@ step "STEP 7 — Opening firewall port 80 (HTTP)"
 
 if command -v ufw &>/dev/null; then
     if ufw status | grep -q "Status: active"; then
-        ufw allow 80/tcp comment "NET-WATCH dashboard" &>/dev/null
-        ok "UFW: port 80 opened"
+        ufw allow 80/tcp comment "NET-WATCH dashboard HTTP" &>/dev/null
+        ufw allow 443/tcp comment "NET-WATCH dashboard HTTPS" &>/dev/null
+        ok "UFW: dashboard web ports opened"
     else
         info "UFW is installed but not active — skipping (port 80 is already accessible)"
     fi
@@ -226,9 +272,13 @@ echo -e "${GREEN}${BOLD}║   ✅  NET-WATCH INSTALLED SUCCESSFULLY   ║${RESET
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo ""
 echo -e "  ${BOLD}Dashboard URL:${RESET}"
-for addr in $ADDRS; do
-    echo -e "    ${CYAN}http://$addr${RESET}"
-done
+if [ "$CADDY_ACTIVE" = true ]; then
+    echo -e "    ${CYAN}https://netwatch.coc-srv-01.home.arpa${RESET}"
+else
+    for addr in $ADDRS; do
+        echo -e "    ${CYAN}http://$addr${RESET}"
+    done
+fi
 echo ""
 echo -e "  ${BOLD}Open this URL in any browser on your network${RESET}"
 echo -e "  (works on your Galaxy Tab, phone, laptop, or desktop)"
@@ -240,8 +290,8 @@ echo -e "    Restart API  : ${CYAN}systemctl restart netwatch${RESET}"
 echo -e "    Update files : ${CYAN}sudo ./setup.sh${RESET}  (re-run anytime)"
 echo ""
 echo -e "  ${BOLD}Next steps:${RESET}"
-echo -e "  1. Open the dashboard and go to ${CYAN}Settings${RESET}"
-echo -e "  2. Set your Pi-hole IP and password in netwatch_api.py"
-echo -e "  3. Run ${CYAN}curl http://localhost:5000/api/pihole/probe${RESET} to verify"
-echo -e "  4. Set PIHOLE_ENABLED = True and restart the service"
+echo -e "  1. Verify: ${CYAN}curl http://localhost:8082/api/health${RESET}"
+echo -e "  2. Add local DNS: netwatch.coc-srv-01.home.arpa → $PRIMARY_IP"
+echo -e "  3. Configure Pi-hole/Wazuh in ${CYAN}/etc/netwatch/netwatch.env${RESET}"
+echo -e "  4. Restart with ${CYAN}sudo systemctl restart netwatch${RESET}"
 echo ""

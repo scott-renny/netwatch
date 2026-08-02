@@ -8,7 +8,8 @@ Generate secret key: python3 -c "import secrets; print(secrets.token_hex(32))"
 """
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
-import json, os, re, subprocess, threading, uuid, datetime
+import json, os, re, subprocess, threading, uuid, datetime, hmac
+from collections import deque
 
 # ══════════════════════════════════════════════════════
 #  SETUP
@@ -16,9 +17,17 @@ import json, os, re, subprocess, threading, uuid, datetime
 app = Flask(__name__)
 app.secret_key        = os.environ.get("NETWATCH_SECRET", "change-me-set-NETWATCH_SECRET-env-var")
 app.permanent_session_lifetime = datetime.timedelta(hours=24)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Strict",
+    SESSION_COOKIE_SECURE=os.environ.get("NETWATCH_HTTPS", "false").lower() == "true",
+)
 
-CORS_ORIGINS = "*"
-CORS(app, origins=CORS_ORIGINS, supports_credentials=True)
+# The dashboard and API are served by the same Nginx origin. CORS stays
+# disabled by default; explicitly set NETWATCH_CORS_ORIGIN only if needed.
+CORS_ORIGIN = os.environ.get("NETWATCH_CORS_ORIGIN", "")
+if CORS_ORIGIN:
+    CORS(app, origins=[CORS_ORIGIN], supports_credentials=True)
 
 BASE_DIR      = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR    = os.path.join(BASE_DIR, "..", "config")
@@ -31,10 +40,51 @@ PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
 #  Default is "netwatch" — change it.
 # ══════════════════════════════════════════════════════
 
-# Auth disabled — all endpoints open
+AUTH_ENABLED = os.environ.get("NETWATCH_AUTH_ENABLED", "true").lower() == "true"
+NETWATCH_PASSWORD = os.environ.get("NETWATCH_PASSWORD", "")
+if AUTH_ENABLED and not NETWATCH_PASSWORD:
+    raise RuntimeError("NETWATCH_PASSWORD must be set when authentication is enabled")
+if app.secret_key == "change-me-set-NETWATCH_SECRET-env-var":
+    raise RuntimeError("NETWATCH_SECRET must be set to a strong random value")
 
+@app.post("/api/auth/login")
+def auth_login():
+    if not AUTH_ENABLED:
+        session["authenticated"] = True
+        return jsonify({"ok": True, "auth_enabled": False})
+    supplied = (request.get_json(silent=True) or {}).get("password", "")
+    if not isinstance(supplied, str) or not hmac.compare_digest(supplied, NETWATCH_PASSWORD):
+        return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+    session.clear()
+    session.permanent = True
+    session["authenticated"] = True
+    return jsonify({"ok": True})
 
+@app.post("/api/auth/logout")
+def auth_logout():
+    session.clear()
+    return jsonify({"ok": True})
 
+@app.get("/api/auth/status")
+def auth_status():
+    return jsonify({
+        "auth_enabled": AUTH_ENABLED,
+        "authenticated": (not AUTH_ENABLED) or bool(session.get("authenticated")),
+    })
+
+@app.before_request
+def require_authentication():
+    if not AUTH_ENABLED:
+        return None
+    if request.path in {"/api/auth/login", "/api/auth/logout", "/api/auth/status", "/api/health"}:
+        return None
+    if request.path.startswith("/api/") and not session.get("authenticated"):
+        return jsonify({"error": "Authentication required"}), 401
+    return None
+
+@app.get("/api/health")
+def health():
+    return jsonify({"ok": True, "service": "netwatch"})
 
 # ══════════════════════════════════════════════════════
 #  PI-HOLE CLIENT (v5 + v6 auto-detect)
@@ -327,47 +377,68 @@ def _wazuh_get(path, params=None):
                       params=params, verify=False, timeout=10)
     r.raise_for_status(); return r.json()
 
-def wazuh_recent_events(limit=10, min_level=5):
-    if not WAZUH_ENABLED: return []
+WAZUH_ALERTS_FILE = os.environ.get(
+    "WAZUH_ALERTS_FILE", "/var/ossec/logs/alerts/alerts.json"
+)
+
+def _local_wazuh_alerts(max_lines=50000):
+    """Read recent JSON alerts locally without exposing Indexer credentials."""
+    if not WAZUH_ENABLED or not os.path.isfile(WAZUH_ALERTS_FILE):
+        return []
     try:
-        data = _wazuh_get("/alerts", params={"level": min_level, "limit": limit, "sort": "-timestamp"})
-        return [{"time":   e.get("timestamp","")[:19].replace("T"," "),
-                 "rule":   e.get("rule",{}).get("description",""),
-                 "level":  e.get("rule",{}).get("level", 0),
-                 "agent":  e.get("agent",{}).get("name","?"),
-                 "mitre":  ", ".join(e.get("rule",{}).get("mitre",{}).get("technique",["—"]))}
-                for e in data.get("data",{}).get("affected_items",[])]
-    except Exception:
+        with open(WAZUH_ALERTS_FILE, "r", encoding="utf-8", errors="replace") as fh:
+            lines = deque(fh, maxlen=max_lines)
+        alerts = []
+        for line in lines:
+            try:
+                alerts.append(json.loads(line))
+            except (TypeError, ValueError):
+                continue
+        return alerts
+    except OSError:
         return []
 
+def wazuh_recent_events(limit=10, min_level=5):
+    alerts = [
+        event for event in _local_wazuh_alerts()
+        if int(event.get("rule", {}).get("level", 0) or 0) >= min_level
+    ]
+    alerts.sort(key=lambda event: event.get("timestamp", ""), reverse=True)
+    return [{
+        "time": event.get("timestamp", "")[:19].replace("T", " "),
+        "rule": event.get("rule", {}).get("description", ""),
+        "level": event.get("rule", {}).get("level", 0),
+        "agent": event.get("agent", {}).get("name", "?"),
+        "mitre": ", ".join(
+            event.get("rule", {}).get("mitre", {}).get("technique", ["—"])
+        ),
+    } for event in alerts[:limit]]
+
 def wazuh_counts_7d():
-    """Per-day alert severity buckets for the last 7 days."""
-    if not WAZUH_ENABLED:
-        return []
-    result = []
+    """Per-day severity buckets from the local Wazuh JSON alert stream."""
     today = datetime.date.today()
+    buckets = {}
+    for days_ago in range(7):
+        day = today - datetime.timedelta(days=days_ago)
+        buckets[day.isoformat()] = {"critical": 0, "high": 0, "medium": 0}
+
+    for event in _local_wazuh_alerts():
+        day = event.get("timestamp", "")[:10]
+        if day not in buckets:
+            continue
+        level = int(event.get("rule", {}).get("level", 0) or 0)
+        if level >= 12:
+            buckets[day]["critical"] += 1
+        elif level >= 9:
+            buckets[day]["high"] += 1
+        elif level >= 5:
+            buckets[day]["medium"] += 1
+
+    result = []
     for days_ago in range(6, -1, -1):
-        d = today - datetime.timedelta(days=days_ago)
-        label = d.strftime("%a")
-        crit = high = med = 0
-        try:
-            start = f"{d.isoformat()}T00:00:00"
-            end   = f"{d.isoformat()}T23:59:59"
-            data  = _wazuh_get("/alerts",
-                                params={"level": "12", "limit": 1,
-                                        "q": f"timestamp>{start};timestamp<{end}"})
-            crit = data.get("data", {}).get("total_affected_items", 0)
-            data  = _wazuh_get("/alerts",
-                                params={"level": "9", "limit": 1,
-                                        "q": f"timestamp>{start};timestamp<{end}"})
-            high = max(0, data.get("data", {}).get("total_affected_items", 0) - crit)
-            data  = _wazuh_get("/alerts",
-                                params={"level": "5", "limit": 1,
-                                        "q": f"timestamp>{start};timestamp<{end}"})
-            med = max(0, data.get("data", {}).get("total_affected_items", 0) - crit - high)
-        except Exception:
-            pass
-        result.append({"date": label, "critical": crit, "high": high, "medium": med})
+        day = today - datetime.timedelta(days=days_ago)
+        counts = buckets[day.isoformat()]
+        result.append({"date": day.strftime("%a"), **counts})
     return result
 
 # ══════════════════════════════════════════════════════
@@ -473,8 +544,23 @@ def vnstat_today(interface=None):
 #  For now "*" means any device on any subnet can reach the API.
 # ════════════════════════════════════════════════════════════════════
 
-SCAN_SUBNETS        = [{"subnet": "192.168.1.0/24", "interface": "eth0"}]
-AUTO_SCAN_INTERVAL  = 300  # 5 minutes — gentler on Wi-Fi
+def _load_scan_subnets():
+    raw = os.environ.get("SCAN_SUBNETS_JSON", "")
+    if not raw:
+        return [{"subnet": "192.168.1.0/24", "interface": "eth0"}]
+    try:
+        value = json.loads(raw)
+        if not isinstance(value, list) or not value:
+            raise ValueError("must be a non-empty JSON list")
+        for item in value:
+            if not isinstance(item, dict) or not item.get("subnet") or not item.get("interface"):
+                raise ValueError("each entry requires subnet and interface")
+        return value
+    except Exception as exc:
+        raise RuntimeError(f"Invalid SCAN_SUBNETS_JSON: {exc}") from exc
+
+SCAN_SUBNETS        = _load_scan_subnets()
+AUTO_SCAN_INTERVAL  = int(os.environ.get("AUTO_SCAN_INTERVAL", "300"))  # 5 minutes — gentler on Wi-Fi
 USAGE_TICK_INTERVAL = 60   # seconds between per-profile usage ticks
 
 # ════════════════════════════════════════════════════════════════════
@@ -1222,8 +1308,11 @@ def get_dns_stats():
 def get_wazuh_alerts():
     limit     = int(request.args.get("limit", 10))
     min_level = int(request.args.get("level", 5))
-    return jsonify({"events":wazuh_recent_events(limit, min_level),
-                    "available":WAZUH_ENABLED})
+    return jsonify({
+        "events": wazuh_recent_events(limit, min_level),
+        "available": WAZUH_ENABLED and os.path.isfile(WAZUH_ALERTS_FILE),
+        "source": "local_alerts_file",
+    })
 
 @app.route("/api/alerts/counts", methods=["GET"])
 def get_alert_counts():
@@ -1612,40 +1701,53 @@ def _usage_loop():
             pass
 
 # ══════════════════════════════════════════════════════
-#  ENTRY POINT
+#  RUNTIME INITIALIZATION
+#  Gunicorn runs one worker with multiple threads so these singleton
+#  accounting/discovery loops are started exactly once.
 # ══════════════════════════════════════════════════════
+_runtime_started = False
+_runtime_lock = threading.Lock()
+
+def initialize_runtime():
+    global _runtime_started
+    with _runtime_lock:
+        if _runtime_started:
+            return
+        _runtime_started = True
+
+        import warnings
+        warnings.filterwarnings("ignore")
+
+        print("\n── NET-WATCH API v3.1 ───────────────────────────────")
+        print(f"  Auth             : {'enabled (session protected)' if AUTH_ENABLED else 'disabled by NETWATCH_AUTH_ENABLED'}")
+        print(f"  Pi-hole          : {'enabled — ' + PIHOLE_HOST if PIHOLE_ENABLED else 'disabled (set PIHOLE_ENABLED=true)'}")
+        print(f"  Wazuh            : {'enabled — local alerts file' if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
+        print(f"  Scan subnets     : {[s['subnet'] for s in SCAN_SUBNETS]}")
+        print(f"  Scan interval    : {AUTO_SCAN_INTERVAL}s | Usage tick: {USAGE_TICK_INTERVAL}s")
+
+        if PIHOLE_ENABLED:
+            print("  Probing Pi-hole  :", end=" ", flush=True)
+            v = pihole.detect_version()
+            print(f"v{v} ✓" if v else "UNREACHABLE ✗")
+            if v == 6:
+                profiles = rj(PROFILES_FILE)
+                synced = 0
+                for p in profiles:
+                    if p.get("pihole_group") and p.get("blocked_domains"):
+                        pihole.sync_blocked_domains(p["pihole_group"], p["blocked_domains"])
+                        synced += 1
+                if synced:
+                    print(f"  Blocklist sync   : {synced} profile(s) synced to Pi-hole")
+
+        threading.Thread(target=_scan_loop, daemon=True, name="scan").start()
+        threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
+        print("  Background threads: scan + usage started")
+        print("  Dashboard URL    : https://netwatch.coc-srv-01.home.arpa")
+        print("─────────────────────────────────────────────────────\n")
+
+initialize_runtime()
+
 if __name__ == "__main__":
-    import warnings; warnings.filterwarnings("ignore")
-
-    print("\n── NET-WATCH API v3 ─────────────────────────────────")
-    print(  '  Auth             : disabled (open access)')
-    print(f"  Pi-hole          : {'enabled — ' + PIHOLE_HOST if PIHOLE_ENABLED else 'disabled (set PIHOLE_ENABLED=true)'}")
-    print(f"  Wazuh            : {'enabled — ' + WAZUH_URL if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
-    print(f"  Scan subnets     : {[s['subnet'] for s in SCAN_SUBNETS]}")
-    print(f"  Scan interval    : {AUTO_SCAN_INTERVAL}s | Usage tick: {USAGE_TICK_INTERVAL}s")
-
-    if PIHOLE_ENABLED:
-        print("  Probing Pi-hole  :", end=" ", flush=True)
-        v = pihole.detect_version()
-        print(f"v{v} ✓" if v else "UNREACHABLE ✗")
-        if v == 6:
-            # Sync all profile blocklists so Pi-hole matches local state
-            # (handles the case where Pi-hole was reset or rebuilt)
-            profiles = rj(PROFILES_FILE)
-            synced = 0
-            for p in profiles:
-                if p.get("pihole_group") and p.get("blocked_domains"):
-                    pihole.sync_blocked_domains(p["pihole_group"], p["blocked_domains"])
-                    synced += 1
-            if synced:
-                print(f"  Blocklist sync   : {synced} profile(s) synced to Pi-hole")
-
-    # Auto-scan disabled — scanning on Wi-Fi can drop the interface.
-    # Use the Scan Network button in the dashboard instead.
-    # To re-enable: remove the # from the line below.
-    #threading.Thread(target=_scan_loop,  daemon=True, name="scan").start()
-    threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
-    print("  Background threads: scan + usage started")
-    print("  Dashboard URL    :  http://<server-ip>")
-    print("─────────────────────────────────────────────────────\n")
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    app.run(host=os.environ.get("NETWATCH_BIND", "127.0.0.1"),
+            port=int(os.environ.get("NETWATCH_PORT", "8082")),
+            debug=False, threaded=True)
