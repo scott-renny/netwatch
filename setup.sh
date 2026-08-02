@@ -80,7 +80,15 @@ info "Running apt update..."
 apt-get update -qq
 
 PACKAGES=""
-for pkg in nmap arp-scan nginx vnstat python3-venv; do
+CADDY_ACTIVE=false
+if command -v caddy &>/dev/null && systemctl is-active --quiet caddy; then
+    CADDY_ACTIVE=true
+    REQUIRED_PACKAGES="nmap arp-scan vnstat python3-venv"
+    ok "Active Caddy installation detected — preserving it"
+else
+    REQUIRED_PACKAGES="nmap arp-scan nginx vnstat python3-venv"
+fi
+for pkg in $REQUIRED_PACKAGES; do
     if dpkg -s "$pkg" &>/dev/null; then
         ok "$pkg is already installed"
     else
@@ -205,33 +213,33 @@ else
     fail "Service failed to start. Fix the error above and re-run this script."
 fi
 
-# ── 7. Install and enable the Nginx config ───────────────
-step "STEP 6 — Configuring Nginx web server"
+# ── 7. Configure the existing web server ─────────────────
+step "STEP 6 — Configuring web server"
 
-cp -f "$SCRIPT_DIR/nginx-netwatch.conf" /etc/nginx/sites-available/netwatch
-
-# Enable the site (create symlink) only if it doesn't already exist
-if [ ! -L /etc/nginx/sites-enabled/netwatch ]; then
-    ln -s /etc/nginx/sites-available/netwatch /etc/nginx/sites-enabled/netwatch
-    ok "Nginx site enabled"
+if [ "$CADDY_ACTIVE" = true ]; then
+    cp -f /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.netwatch-backup-$(date +%Y%m%d%H%M%S)"
+    cp -f "$SCRIPT_DIR/caddy-netwatch.conf" /etc/caddy/netwatch.Caddyfile
+    caddy fmt --overwrite /etc/caddy/netwatch.Caddyfile
+    if ! grep -Fqx 'import /etc/caddy/netwatch.Caddyfile' /etc/caddy/Caddyfile; then
+        printf '\nimport /etc/caddy/netwatch.Caddyfile\n' >> /etc/caddy/Caddyfile
+    fi
+    if caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+        systemctl reload caddy
+        ok "Caddy reloaded with NET-WATCH at https://netwatch.coc-srv-01.home.arpa"
+    else
+        fail "Caddy validation failed; restore the timestamped Caddyfile backup"
+    fi
 else
-    ok "Nginx site link already exists"
-fi
-
-# Remove the default Nginx welcome page so NET-WATCH loads at /
-if [ -L /etc/nginx/sites-enabled/default ]; then
-    rm /etc/nginx/sites-enabled/default
-    info "Removed default Nginx page (NET-WATCH will now load at the root URL)"
-fi
-
-# Test the Nginx config before reloading
-if nginx -t &>/dev/null; then
-    systemctl reload nginx
-    ok "Nginx reloaded with NET-WATCH config"
-else
-    warn "Nginx config test failed — showing error:"
-    nginx -t
-    fail "Fix the Nginx config error above and re-run."
+    cp -f "$SCRIPT_DIR/nginx-netwatch.conf" /etc/nginx/sites-available/netwatch
+    ln -sf /etc/nginx/sites-available/netwatch /etc/nginx/sites-enabled/netwatch
+    rm -f /etc/nginx/sites-enabled/default
+    if nginx -t; then
+        systemctl enable --now nginx
+        systemctl reload nginx
+        ok "Nginx reloaded with NET-WATCH config"
+    else
+        fail "Nginx configuration test failed"
+    fi
 fi
 
 # ── 8. Firewall ───────────────────────────────────────────
@@ -239,8 +247,9 @@ step "STEP 7 — Opening firewall port 80 (HTTP)"
 
 if command -v ufw &>/dev/null; then
     if ufw status | grep -q "Status: active"; then
-        ufw allow 80/tcp comment "NET-WATCH dashboard" &>/dev/null
-        ok "UFW: port 80 opened"
+        ufw allow 80/tcp comment "NET-WATCH dashboard HTTP" &>/dev/null
+        ufw allow 443/tcp comment "NET-WATCH dashboard HTTPS" &>/dev/null
+        ok "UFW: dashboard web ports opened"
     else
         info "UFW is installed but not active — skipping (port 80 is already accessible)"
     fi
@@ -261,9 +270,13 @@ echo -e "${GREEN}${BOLD}║   ✅  NET-WATCH INSTALLED SUCCESSFULLY   ║${RESET
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo ""
 echo -e "  ${BOLD}Dashboard URL:${RESET}"
-for addr in $ADDRS; do
-    echo -e "    ${CYAN}http://$addr${RESET}"
-done
+if [ "$CADDY_ACTIVE" = true ]; then
+    echo -e "    ${CYAN}https://netwatch.coc-srv-01.home.arpa${RESET}"
+else
+    for addr in $ADDRS; do
+        echo -e "    ${CYAN}http://$addr${RESET}"
+    done
+fi
 echo ""
 echo -e "  ${BOLD}Open this URL in any browser on your network${RESET}"
 echo -e "  (works on your Galaxy Tab, phone, laptop, or desktop)"
