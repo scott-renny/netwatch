@@ -14,7 +14,7 @@ WorkingDirectory=/opt/netwatch/api
 
 # The ExecStart path must be the full path to python3.
 # Confirm yours with: which python3
-ExecStart=/opt/netwatch/venv/bin/python /opt/netwatch/api/netwatch_api.py
+ExecStart=/opt/netwatch/venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:8082 --timeout 120 --access-logfile - --error-logfile - netwatch_api:app
 
 # Restart automatically if the process crashes or is killed.
 # RestartSec gives it 5 seconds before trying again so a rapid crash
