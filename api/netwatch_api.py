@@ -1667,42 +1667,53 @@ def _usage_loop():
             pass
 
 # ══════════════════════════════════════════════════════
-#  ENTRY POINT
+#  RUNTIME INITIALIZATION
+#  Gunicorn runs one worker with multiple threads so these singleton
+#  accounting/discovery loops are started exactly once.
 # ══════════════════════════════════════════════════════
+_runtime_started = False
+_runtime_lock = threading.Lock()
+
+def initialize_runtime():
+    global _runtime_started
+    with _runtime_lock:
+        if _runtime_started:
+            return
+        _runtime_started = True
+
+        import warnings
+        warnings.filterwarnings("ignore")
+
+        print("\n── NET-WATCH API v3.1 ───────────────────────────────")
+        print("  Auth             : enabled (session protected)")
+        print(f"  Pi-hole          : {'enabled — ' + PIHOLE_HOST if PIHOLE_ENABLED else 'disabled (set PIHOLE_ENABLED=true)'}")
+        print(f"  Wazuh            : {'enabled — ' + WAZUH_URL if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
+        print(f"  Scan subnets     : {[s['subnet'] for s in SCAN_SUBNETS]}")
+        print(f"  Scan interval    : {AUTO_SCAN_INTERVAL}s | Usage tick: {USAGE_TICK_INTERVAL}s")
+
+        if PIHOLE_ENABLED:
+            print("  Probing Pi-hole  :", end=" ", flush=True)
+            v = pihole.detect_version()
+            print(f"v{v} ✓" if v else "UNREACHABLE ✗")
+            if v == 6:
+                profiles = rj(PROFILES_FILE)
+                synced = 0
+                for p in profiles:
+                    if p.get("pihole_group") and p.get("blocked_domains"):
+                        pihole.sync_blocked_domains(p["pihole_group"], p["blocked_domains"])
+                        synced += 1
+                if synced:
+                    print(f"  Blocklist sync   : {synced} profile(s) synced to Pi-hole")
+
+        threading.Thread(target=_scan_loop, daemon=True, name="scan").start()
+        threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
+        print("  Background threads: scan + usage started")
+        print("  Dashboard URL    : https://netwatch.coc-srv-01.home.arpa")
+        print("─────────────────────────────────────────────────────\n")
+
+initialize_runtime()
+
 if __name__ == "__main__":
-    import warnings; warnings.filterwarnings("ignore")
-
-    print("\n── NET-WATCH API v3 ─────────────────────────────────")
-    print(  '  Auth             : disabled (open access)')
-    print(f"  Pi-hole          : {'enabled — ' + PIHOLE_HOST if PIHOLE_ENABLED else 'disabled (set PIHOLE_ENABLED=true)'}")
-    print(f"  Wazuh            : {'enabled — ' + WAZUH_URL if WAZUH_ENABLED else 'disabled (set WAZUH_ENABLED=true)'}")
-    print(f"  Scan subnets     : {[s['subnet'] for s in SCAN_SUBNETS]}")
-    print(f"  Scan interval    : {AUTO_SCAN_INTERVAL}s | Usage tick: {USAGE_TICK_INTERVAL}s")
-
-    if PIHOLE_ENABLED:
-        print("  Probing Pi-hole  :", end=" ", flush=True)
-        v = pihole.detect_version()
-        print(f"v{v} ✓" if v else "UNREACHABLE ✗")
-        if v == 6:
-            # Sync all profile blocklists so Pi-hole matches local state
-            # (handles the case where Pi-hole was reset or rebuilt)
-            profiles = rj(PROFILES_FILE)
-            synced = 0
-            for p in profiles:
-                if p.get("pihole_group") and p.get("blocked_domains"):
-                    pihole.sync_blocked_domains(p["pihole_group"], p["blocked_domains"])
-                    synced += 1
-            if synced:
-                print(f"  Blocklist sync   : {synced} profile(s) synced to Pi-hole")
-
-    # Auto-scan disabled — scanning on Wi-Fi can drop the interface.
-    # Use the Scan Network button in the dashboard instead.
-    # To re-enable: remove the # from the line below.
-    threading.Thread(target=_scan_loop,  daemon=True, name="scan").start()
-    threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
-    print("  Background threads: scan + usage started")
-    print("  Dashboard URL    :  http://<server-ip>")
-    print("─────────────────────────────────────────────────────\n")
     app.run(host=os.environ.get("NETWATCH_BIND", "127.0.0.1"),
             port=int(os.environ.get("NETWATCH_PORT", "8082")),
             debug=False, threaded=True)
