@@ -179,6 +179,7 @@ if [ ! -f /etc/netwatch/netwatch.env ]; then
     {
         printf 'NETWATCH_PASSWORD=%s\n' "$NETWATCH_PASSWORD_VALUE"
         printf 'NETWATCH_SECRET=%s\n' "$NETWATCH_SECRET_VALUE"
+        printf 'NETWATCH_AUTH_ENABLED=true\n'
         printf 'SCAN_SUBNETS_JSON=[{"subnet":"%s","interface":"%s"}]\n' "$PRIMARY_CIDR" "$PRIMARY_IF"
         printf 'PIHOLE_ENABLED=false\n'
         printf 'WAZUH_ENABLED=false\n'
