@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 import json, os, re, subprocess, threading, uuid, datetime, hmac
 from collections import deque
+from urllib.parse import quote
 
 # ══════════════════════════════════════════════════════
 #  SETUP
@@ -95,6 +96,9 @@ PIHOLE_HTTPS    = os.environ.get("PIHOLE_HTTPS", "false").lower() == "true"
 PIHOLE_V5_TOKEN = os.environ.get("PIHOLE_V5_TOKEN", "")
 PIHOLE_V6_PASS  = os.environ.get("PIHOLE_V6_PASSWORD", "")
 PIHOLE_ENABLED  = os.environ.get("PIHOLE_ENABLED", "false").lower() == "true"
+PIHOLE_CONTROL_GROUP = os.environ.get("PIHOLE_CONTROL_GROUP", "NETWATCH-Control")
+PIHOLE_ACCESS_RULE = os.environ.get("PIHOLE_ACCESS_RULE", "^.+$")
+PIHOLE_ACCESS_COMMENT = "NET-WATCH managed access control - do not edit"
 
 class PiholeClient:
     def __init__(self):
@@ -150,20 +154,19 @@ class PiholeClient:
             r = self._req("get", path, headers={"sid": self._sid}, **kw)
         r.raise_for_status(); return r.json()
 
-    def set_group_enabled(self, group_name, enabled):
-        if self.ver is None: self.detect_version()
-        if self.ver != 6:
-            return {"ok": False, "error": "Pi-hole v5 does not support per-group API — upgrade to v6"}
-        try:
-            groups = self._v6_get("/api/groups").get("groups", [])
-            m = next((g for g in groups if g.get("name") == group_name), None)
-            if not m: return {"ok": False, "error": f'Group "{group_name}" not found in Pi-hole'}
-            r = self._req("put", f"/api/groups/{m['id']}",
-                          headers={"sid": self._sid}, json={"enabled": enabled})
-            r.raise_for_status()
-            return {"ok": True, "group": group_name, "enabled": enabled}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+    def _v6_request(self, method, path, **kwargs):
+        """Authenticated Pi-hole v6 request with one session refresh."""
+        if not self._sid:
+            self._v6_auth()
+        headers = dict(kwargs.pop("headers", {}))
+        headers["sid"] = self._sid
+        r = self._req(method, path, headers=headers, **kwargs)
+        if r.status_code == 401:
+            self._sid = None
+            self._v6_auth()
+            headers["sid"] = self._sid
+            r = self._req(method, path, headers=headers, **kwargs)
+        return r
 
     def top_clients(self):
         """Per-client DNS query counts — used for bandwidth chart."""
@@ -214,129 +217,285 @@ class PiholeClient:
         except Exception:
             return {}
 
-    # ── Domain blocking per group ─────────────────────────────────
+    # ── Pi-hole v6 group/domain enforcement ─────────────────
+
+    def _require_v6(self):
+        if self.ver is None:
+            self.detect_version()
+        if self.ver != 6:
+            raise RuntimeError("Pi-hole v6 is required for per-profile enforcement")
+
+    def _groups(self):
+        self._require_v6()
+        return self._v6_get("/api/groups").get("groups", [])
+
+    def _get_group(self, group_name):
+        return next((g for g in self._groups() if g.get("name") == group_name), None)
 
     def _get_group_id(self, group_name):
-        """Returns the numeric Pi-hole group ID for a named group, or None."""
-        if self.ver is None: self.detect_version()
-        if self.ver != 6: return None
-        try:
-            groups = self._v6_get("/api/groups").get("groups", [])
-            m = next((g for g in groups if g.get("name") == group_name), None)
-            return m["id"] if m else None
-        except Exception:
+        group = self._get_group(group_name)
+        return group.get("id") if group else None
+
+    def ensure_group(self, group_name, comment):
+        """Return an enabled non-Default group, creating the control group if absent."""
+        self._require_v6()
+        group = self._get_group(group_name)
+        if group:
+            if int(group.get("id", 0)) == 0:
+                raise RuntimeError("The Pi-hole Default group cannot be used for NET-WATCH enforcement")
+            if not group.get("enabled", True):
+                raise RuntimeError(f'Pi-hole group "{group_name}" is disabled')
+            return group
+
+        r = self._v6_request(
+            "post", "/api/groups",
+            json={"name": group_name, "comment": comment, "enabled": True},
+        )
+        if r.status_code not in (200, 201):
+            r.raise_for_status()
+        group = next(
+            (g for g in r.json().get("groups", []) if g.get("name") == group_name),
+            None,
+        ) or self._get_group(group_name)
+        if not group or int(group.get("id", 0)) == 0:
+            raise RuntimeError(f'Could not safely create Pi-hole group "{group_name}"')
+        return group
+
+    @staticmethod
+    def _domain_path(domain_type, kind, domain):
+        return f"/api/domains/{domain_type}/{kind}/{quote(domain, safe='')}"
+
+    def _get_domain(self, domain_type, kind, domain):
+        r = self._v6_request("get", self._domain_path(domain_type, kind, domain))
+        if r.status_code == 404:
             return None
+        r.raise_for_status()
+        return next(
+            (
+                item for item in r.json().get("domains", [])
+                if item.get("domain") == domain
+                and item.get("type") == domain_type
+                and item.get("kind") == kind
+            ),
+            None,
+        )
+
+    def _put_domain(self, domain_type, kind, domain, comment, groups, enabled=True):
+        payload = {
+            "type": domain_type,
+            "kind": kind,
+            "comment": comment,
+            "groups": sorted(set(int(g) for g in groups)),
+            "enabled": bool(enabled),
+        }
+        r = self._v6_request(
+            "put", self._domain_path(domain_type, kind, domain), json=payload
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def _post_domain(self, domain_type, kind, domain, comment, groups, enabled=True):
+        payload = {
+            "domain": domain,
+            "comment": comment,
+            "groups": sorted(set(int(g) for g in groups)),
+            "enabled": bool(enabled),
+        }
+        r = self._v6_request(
+            "post", f"/api/domains/{domain_type}/{kind}", json=payload
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def set_access_blocked_groups(self, group_names):
+        """
+        Assign the managed deny-all regex to the empty control group plus
+        precisely the profile groups that should currently be blocked.
+        The control group prevents Pi-hole from auto-assigning the rule to
+        Default when no profiles are blocked.
+        """
+        try:
+            self._require_v6()
+            control = self.ensure_group(
+                PIHOLE_CONTROL_GROUP,
+                "NET-WATCH safety group; do not assign clients",
+            )
+            all_groups = {g.get("name"): g for g in self._groups()}
+            requested = sorted(set(name for name in group_names if name))
+            target_ids = [int(control["id"])]
+            missing = []
+            disabled = []
+            unsafe = []
+
+            for name in requested:
+                group = all_groups.get(name)
+                if not group:
+                    missing.append(name)
+                    continue
+                if int(group.get("id", 0)) == 0 or name == "Default":
+                    unsafe.append(name)
+                    continue
+                if not group.get("enabled", True):
+                    disabled.append(name)
+                    continue
+                target_ids.append(int(group["id"]))
+
+            if missing or disabled or unsafe:
+                details = []
+                if missing:
+                    details.append("missing groups: " + ", ".join(missing))
+                if disabled:
+                    details.append("disabled groups: " + ", ".join(disabled))
+                if unsafe:
+                    details.append("unsafe groups: " + ", ".join(unsafe))
+                return {"ok": False, "error": "; ".join(details)}
+
+            target_ids = sorted(set(target_ids))
+            entry = self._get_domain("deny", "regex", PIHOLE_ACCESS_RULE)
+            if entry and entry.get("comment") != PIHOLE_ACCESS_COMMENT:
+                return {
+                    "ok": False,
+                    "error": (
+                        f'Pi-hole regex "{PIHOLE_ACCESS_RULE}" already exists '
+                        "and is not owned by NET-WATCH"
+                    ),
+                }
+
+            if entry:
+                current_ids = sorted(set(int(g) for g in entry.get("groups", [])))
+                if current_ids == target_ids and entry.get("enabled", True):
+                    return {
+                        "ok": True,
+                        "changed": False,
+                        "blocked_groups": requested,
+                        "control_group": PIHOLE_CONTROL_GROUP,
+                    }
+                self._put_domain(
+                    "deny", "regex", PIHOLE_ACCESS_RULE,
+                    PIHOLE_ACCESS_COMMENT, target_ids, True,
+                )
+            else:
+                self._post_domain(
+                    "deny", "regex", PIHOLE_ACCESS_RULE,
+                    PIHOLE_ACCESS_COMMENT, target_ids, True,
+                )
+
+            return {
+                "ok": True,
+                "changed": True,
+                "blocked_groups": requested,
+                "control_group": PIHOLE_CONTROL_GROUP,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    # ── Exact per-profile domain blocklists ──────────────────────
 
     def get_blocked_domains(self, group_name):
-        """
-        Returns the list of domains currently on Pi-hole's denylist
-        that are assigned to the given group. Returns [] if Pi-hole
-        isn't connected or the group doesn't exist.
-        """
-        if self.ver is None: self.detect_version()
-        if self.ver != 6: return []
-        try:
-            gid = self._get_group_id(group_name)
-            if gid is None: return []
-            # Get all deny-type domain entries
-            data = self._v6_get("/api/domains", params={"type": "deny"})
-            domains = data.get("domains", [])
-            # Filter to only those assigned to this group
-            result = []
-            for d in domains:
-                groups_for_domain = d.get("groups", [])
-                if gid in groups_for_domain:
-                    result.append({
-                        "domain":  d.get("domain"),
-                        "id":      d.get("id"),
-                        "comment": d.get("comment", ""),
-                    })
-            return result
-        except Exception:
+        self._require_v6()
+        gid = self._get_group_id(group_name)
+        if gid is None:
             return []
+        data = self._v6_get("/api/domains/deny/exact")
+        return [
+            {
+                "domain": item.get("domain"),
+                "id": item.get("id"),
+                "comment": item.get("comment", ""),
+            }
+            for item in data.get("domains", [])
+            if int(gid) in [int(g) for g in item.get("groups", [])]
+        ]
 
     def add_blocked_domain(self, group_name, domain, comment=""):
-        """
-        Adds a domain to Pi-hole's denylist and assigns it to the
-        given group, so only devices in that group are blocked.
-        Other groups are unaffected.
-        Returns {"ok": True} on success or {"ok": False, "error": ...}.
-        """
-        if self.ver is None: self.detect_version()
-        if self.ver != 6:
-            return {"ok": False, "error": "Pi-hole v5 does not support per-group domain blocking via API — upgrade to v6"}
         try:
+            self._require_v6()
             gid = self._get_group_id(group_name)
             if gid is None:
-                return {"ok": False, "error": f'Pi-hole group "{group_name}" not found — create it in Pi-hole first'}
+                return {
+                    "ok": False,
+                    "error": f'Pi-hole group "{group_name}" not found',
+                }
+            if int(gid) == 0:
+                return {"ok": False, "error": "Refusing to modify the Default group"}
 
-            # Add domain to the denylist, assigned to this group only
-            r = self._req("post", "/api/domains",
-                          headers={"sid": self._sid},
-                          json={"domain": domain,
-                                "type":    "deny",
-                                "kind":    "exact",
-                                "comment": comment or f"Blocked for profile group: {group_name}",
-                                "groups":  [gid],
-                                "enabled": True})
-            if r.status_code in (200, 201):
-                return {"ok": True, "domain": domain, "group": group_name}
-            # Domain might already exist — try to add the group assignment
-            if r.status_code == 409:
-                return {"ok": False, "error": f'"{domain}" is already on the denylist (possibly in a different group — manage it from Pi-hole directly)'}
-            r.raise_for_status()
-            return {"ok": True, "domain": domain}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+            entry = self._get_domain("deny", "exact", domain)
+            rule_comment = comment or f"Blocked for profile group: {group_name}"
+            if entry:
+                groups = sorted(
+                    set([int(g) for g in entry.get("groups", [])] + [int(gid)])
+                )
+                self._put_domain(
+                    "deny", "exact", domain,
+                    entry.get("comment") or rule_comment,
+                    groups, entry.get("enabled", True),
+                )
+            else:
+                self._post_domain(
+                    "deny", "exact", domain, rule_comment, [int(gid)], True
+                )
+            return {"ok": True, "domain": domain, "group": group_name}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
 
     def remove_blocked_domain(self, group_name, domain):
-        """
-        Removes a domain from Pi-hole's denylist for the given group.
-        If the domain is also assigned to other groups, those are unaffected.
-        """
-        if self.ver is None: self.detect_version()
-        if self.ver != 6:
-            return {"ok": False, "error": "Pi-hole v5 does not support per-group domain management via API"}
         try:
+            self._require_v6()
             gid = self._get_group_id(group_name)
             if gid is None:
                 return {"ok": False, "error": f'Pi-hole group "{group_name}" not found'}
+            entry = self._get_domain("deny", "exact", domain)
+            if not entry or int(gid) not in [int(g) for g in entry.get("groups", [])]:
+                return {
+                    "ok": False,
+                    "error": f'"{domain}" not found in group "{group_name}"',
+                }
 
-            # Find the domain entry
-            data    = self._v6_get("/api/domains", params={"type": "deny"})
-            domains = data.get("domains", [])
-            entry   = next((d for d in domains
-                            if d.get("domain") == domain and gid in d.get("groups", [])),
-                           None)
-            if not entry:
-                return {"ok": False, "error": f'"{domain}" not found in group "{group_name}"'}
-
-            r = self._req("delete", f"/api/domains/{entry['id']}",
-                          headers={"sid": self._sid})
-            r.raise_for_status()
+            remaining = [
+                int(g) for g in entry.get("groups", []) if int(g) != int(gid)
+            ]
+            if remaining:
+                self._put_domain(
+                    "deny", "exact", domain,
+                    entry.get("comment"), remaining, entry.get("enabled", True),
+                )
+            else:
+                r = self._v6_request(
+                    "delete", self._domain_path("deny", "exact", domain)
+                )
+                if r.status_code not in (200, 204):
+                    r.raise_for_status()
             return {"ok": True, "domain": domain, "removed_from": group_name}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
 
     def sync_blocked_domains(self, group_name, domains):
-        """
-        Ensures Pi-hole's denylist for this group exactly matches the
-        provided list. Adds missing entries, removes extras.
-        Called at startup so Pi-hole stays in sync even after a server reboot.
-        Returns a summary dict of what was added/removed.
-        """
-        if not PIHOLE_ENABLED or self.ver != 6:
-            return {"synced": False}
+        if not PIHOLE_ENABLED:
+            return {"synced": False, "error": "PIHOLE_ENABLED is false"}
         try:
-            current  = {d["domain"] for d in self.get_blocked_domains(group_name)}
-            desired  = set(domains)
-            to_add   = desired - current
-            to_remove = current - desired
-            for d in to_add:    self.add_blocked_domain(group_name, d)
-            for d in to_remove: self.remove_blocked_domain(group_name, d)
-            return {"synced": True, "added": list(to_add), "removed": list(to_remove)}
-        except Exception as e:
-            return {"synced": False, "error": str(e)}
+            current = {item["domain"] for item in self.get_blocked_domains(group_name)}
+            desired = set(domains)
+            added = []
+            removed = []
+            errors = []
+            for domain in sorted(desired - current):
+                result = self.add_blocked_domain(group_name, domain)
+                (added if result.get("ok") else errors).append(
+                    domain if result.get("ok") else result.get("error")
+                )
+            for domain in sorted(current - desired):
+                result = self.remove_blocked_domain(group_name, domain)
+                (removed if result.get("ok") else errors).append(
+                    domain if result.get("ok") else result.get("error")
+                )
+            return {
+                "synced": not errors,
+                "added": added,
+                "removed": removed,
+                "errors": errors,
+            }
+        except Exception as exc:
+            return {"synced": False, "error": str(exc)}
 
 
 pihole = PiholeClient()
