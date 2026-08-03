@@ -1289,6 +1289,69 @@ def norm_sched(raw):
             for d in DAY_KEYS}
 
 # ══════════════════════════════════════════════════════
+#  PI-HOLE ENFORCEMENT RECONCILIATION
+# ══════════════════════════════════════════════════════
+_enforcement_lock = threading.Lock()
+_enforcement_last = {
+    "ok": not PIHOLE_ENABLED,
+    "blocked_groups": [],
+    "profiles": [],
+    "warnings": [],
+    "timestamp": None,
+}
+
+def enforcement_plan(profiles):
+    blocked_groups = set()
+    details = []
+    warnings = []
+    for profile in profiles:
+        state = access_state(profile)
+        if state["allowed"]:
+            continue
+        group_name = profile.get("pihole_group")
+        details.append({
+            "profile_id": profile["id"],
+            "profile_name": profile["name"],
+            "group": group_name,
+            "reason": state["reason"],
+        })
+        if group_name:
+            blocked_groups.add(group_name)
+        else:
+            warnings.append(
+                f'Profile "{profile["name"]}" is blocked but has no Pi-hole group'
+            )
+    return {
+        "blocked_groups": sorted(blocked_groups),
+        "profiles": details,
+        "warnings": warnings,
+    }
+
+def reconcile_pihole_enforcement(profiles=None):
+    """Make Pi-hole's managed deny-all rule match current profile access state."""
+    global _enforcement_last
+    if profiles is None:
+        profiles = rj(PROFILES_FILE)
+    plan = enforcement_plan(profiles)
+    timestamp = datetime.datetime.now().isoformat()
+
+    if not PIHOLE_ENABLED:
+        result = {
+            "ok": False,
+            "error": "PIHOLE_ENABLED is false",
+            **plan,
+            "timestamp": timestamp,
+        }
+        _enforcement_last = result
+        return result
+
+    with _enforcement_lock:
+        action = pihole.set_access_blocked_groups(plan["blocked_groups"])
+        result = {**action, **plan, "timestamp": timestamp}
+        _enforcement_last = result
+        return result
+
+# ══════════════════════════════════════════════════════
 #  DEVICES ENDPOINTS
 # ══════════════════════════════════════════════════════
 @app.route("/api/devices", methods=["GET"])
@@ -1348,24 +1411,43 @@ def add_profile():
          "schedule":norm_sched(b.get("schedule")),
          "usage":{"minutes_used_today":0,"usage_date":today_str()}}
     profiles.append(p); wj(PROFILES_FILE, profiles)
-    return jsonify(p), 201
+    enforcement = reconcile_pihole_enforcement(profiles) if PIHOLE_ENABLED else None
+    result = dict(p)
+    if enforcement is not None:
+        result["enforcement"] = enforcement
+    return jsonify(result), 201
 
 @app.route("/api/profiles/<pid>", methods=["PATCH"])
 def update_profile(pid):
     profiles = rj(PROFILES_FILE)
-    b = request.get_json(force=True) or {}
-    for p in profiles:
-        if p["id"] == pid:
-            if "schedule" in b:
-                merged = dict(p.get("schedule") or DEFAULT_SCHED)
-                for day, dd in b["schedule"].items():
-                    if day in DAY_KEYS:
-                        merged[day] = {"start": dd.get("start", merged.get(day,{}).get("start","00:00")),
-                                       "end":   dd.get("end",   merged.get(day,{}).get("end","23:59")),
-                                       "daily_limit_minutes": dd.get("daily_limit_minutes")}
-                b["schedule"] = norm_sched(merged)
-            p.update(b); wj(PROFILES_FILE, profiles); return jsonify(p)
-    return jsonify({"error":"not found"}), 404
+    body = request.get_json(force=True) or {}
+    for profile in profiles:
+        if profile["id"] != pid:
+            continue
+        if "schedule" in body:
+            merged = dict(profile.get("schedule") or DEFAULT_SCHED)
+            for day, day_data in body["schedule"].items():
+                if day in DAY_KEYS:
+                    merged[day] = {
+                        "start": day_data.get(
+                            "start", merged.get(day, {}).get("start", "00:00")
+                        ),
+                        "end": day_data.get(
+                            "end", merged.get(day, {}).get("end", "23:59")
+                        ),
+                        "daily_limit_minutes": day_data.get("daily_limit_minutes"),
+                    }
+            body["schedule"] = norm_sched(merged)
+        profile.update(body)
+        wj(PROFILES_FILE, profiles)
+        enforcement = (
+            reconcile_pihole_enforcement(profiles) if PIHOLE_ENABLED else None
+        )
+        result = dict(profile)
+        if enforcement is not None:
+            result["enforcement"] = enforcement
+        return jsonify(result)
+    return jsonify({"error": "not found"}), 404
 
 @app.route("/api/profiles/<pid>", methods=["DELETE"])
 def delete_profile(pid):
@@ -1377,7 +1459,8 @@ def delete_profile(pid):
     for d in devices:
         if d.get("profile_id") == pid: d["profile_id"] = None; changed = True
     if changed: wj(DEVICES_FILE, devices)
-    return jsonify({"deleted":pid})
+    enforcement = reconcile_pihole_enforcement(remaining) if PIHOLE_ENABLED else None
+    return jsonify({"deleted":pid,"enforcement":enforcement})
 
 # ══════════════════════════════════════════════════════
 #  KILL SWITCH
@@ -1385,18 +1468,41 @@ def delete_profile(pid):
 @app.route("/api/profiles/<pid>/killswitch", methods=["POST"])
 def toggle_kill(pid):
     profiles = rj(PROFILES_FILE)
-    p = next((x for x in profiles if x["id"]==pid), None)
-    if not p: return jsonify({"error":"not found"}), 404
-    if not p.get("killable",True): return jsonify({"error":"protected"}), 403
-    p["killed"] = not p["killed"]; wj(PROFILES_FILE, profiles)
+    profile = next((item for item in profiles if item["id"] == pid), None)
+    if not profile:
+        return jsonify({"error": "not found"}), 404
+    if not profile.get("killable", True):
+        return jsonify({"error": "protected"}), 403
+    if not PIHOLE_ENABLED:
+        return jsonify({"error": "Pi-hole enforcement is disabled"}), 503
+    if not profile.get("pihole_group"):
+        return jsonify({"error": "Set this profile's Pi-hole group first"}), 400
+
+    previous = bool(profile.get("killed", False))
+    profile["killed"] = not previous
+    wj(PROFILES_FILE, profiles)
+    enforcement = reconcile_pihole_enforcement(profiles)
+
+    if not enforcement.get("ok"):
+        profile["killed"] = previous
+        wj(PROFILES_FILE, profiles)
+        rollback = reconcile_pihole_enforcement(profiles)
+        return jsonify({
+            "error": "Pi-hole rejected the access-control change",
+            "details": enforcement.get("error"),
+            "rolled_back": rollback.get("ok", False),
+        }), 502
+
     devices = rj(DEVICES_FILE)
-    affected = [d for d in devices if d.get("profile_id")==pid]
-    pihole_r = {"ok":False,"error":"PIHOLE_ENABLED is False"}
-    if PIHOLE_ENABLED and p.get("pihole_group"):
-        pihole_r = pihole.set_group_enabled(p["pihole_group"], not p["killed"])
-    return jsonify({"profile_id":pid,"profile_name":p["name"],"killed":p["killed"],
-                    "devices_affected":len(affected),"pihole_action":pihole_r,
-                    "timestamp":datetime.datetime.now().isoformat()})
+    affected = [d for d in devices if d.get("profile_id") == pid]
+    return jsonify({
+        "profile_id": pid,
+        "profile_name": profile["name"],
+        "killed": profile["killed"],
+        "devices_affected": len(affected),
+        "pihole_action": enforcement,
+        "timestamp": datetime.datetime.now().isoformat(),
+    })
 
 # ══════════════════════════════════════════════════════
 #  USAGE TRACKING
@@ -1404,28 +1510,55 @@ def toggle_kill(pid):
 @app.route("/api/profiles/<pid>/usage/tick", methods=["POST"])
 def tick_usage(pid):
     profiles = rj(PROFILES_FILE)
-    p = next((x for x in profiles if x["id"]==pid), None)
-    if not p: return jsonify({"error":"not found"}), 404
-    mins_add = (request.get_json(silent=True) or {}).get("minutes", 1)
-    ensure_reset(p); p["usage"]["minutes_used_today"] += mins_add
+    profile = next((item for item in profiles if item["id"] == pid), None)
+    if not profile:
+        return jsonify({"error": "not found"}), 404
+
+    minutes = (request.get_json(silent=True) or {}).get("minutes", 1)
+    try:
+        minutes = float(minutes)
+    except (TypeError, ValueError):
+        return jsonify({"error": "minutes must be numeric"}), 400
+    if minutes <= 0 or minutes > 1440:
+        return jsonify({"error": "minutes must be between 0 and 1440"}), 400
+
+    ensure_reset(profile)
+    profile["usage"]["minutes_used_today"] += minutes
     wj(PROFILES_FILE, profiles)
-    s = access_state(p)
-    auto_kill = s["reason"]=="budget_exhausted" and not p.get("killed")
-    if auto_kill:
-        p["killed"] = True; wj(PROFILES_FILE, profiles); s = access_state(p)
-    return jsonify({"profile_id":pid,"minutes_used_today":p["usage"]["minutes_used_today"],
-                    "access":s,"auto_killed_by_budget":auto_kill})
+    state = access_state(profile)
+    enforcement = (
+        reconcile_pihole_enforcement(profiles) if PIHOLE_ENABLED else None
+    )
+    return jsonify({
+        "profile_id": pid,
+        "minutes_used_today": profile["usage"]["minutes_used_today"],
+        "access": state,
+        "budget_exhausted": state["reason"] == "budget_exhausted",
+        "pihole_action": enforcement,
+    })
 
 @app.route("/api/profiles/<pid>/usage/reset", methods=["POST"])
 def reset_usage(pid):
     profiles = rj(PROFILES_FILE)
-    p = next((x for x in profiles if x["id"]==pid), None)
-    if not p: return jsonify({"error":"not found"}), 404
-    unkill = (request.get_json(silent=True) or {}).get("unkill", True)
-    p["usage"] = {"minutes_used_today":0,"usage_date":today_str()}
-    if unkill: p["killed"] = False
+    profile = next((item for item in profiles if item["id"] == pid), None)
+    if not profile:
+        return jsonify({"error": "not found"}), 404
+    clear_manual_kill = (
+        request.get_json(silent=True) or {}
+    ).get("clear_manual_kill", False)
+    profile["usage"] = {"minutes_used_today": 0, "usage_date": today_str()}
+    if clear_manual_kill:
+        profile["killed"] = False
     wj(PROFILES_FILE, profiles)
-    return jsonify({"profile_id":pid,"minutes_used_today":0,"killed":p["killed"]})
+    enforcement = (
+        reconcile_pihole_enforcement(profiles) if PIHOLE_ENABLED else None
+    )
+    return jsonify({
+        "profile_id": pid,
+        "minutes_used_today": 0,
+        "killed": profile.get("killed", False),
+        "pihole_action": enforcement,
+    })
 
 @app.route("/api/profiles/<pid>/access", methods=["GET"])
 def get_access(pid):
@@ -1839,25 +1972,45 @@ def _scan_loop():
 
 def _usage_loop():
     import time
+    tick_minutes = USAGE_TICK_INTERVAL / 60.0
     while True:
         time.sleep(USAGE_TICK_INTERVAL)
         try:
-            devices  = rj(DEVICES_FILE)
+            devices = rj(DEVICES_FILE)
             profiles = rj(PROFILES_FILE)
-            active_pids = {d["profile_id"] for d in devices
-                           if d.get("status")=="online" and d.get("profile_id")}
+            active_pids = {
+                device["profile_id"] for device in devices
+                if device.get("status") == "online" and device.get("profile_id")
+            }
             changed = False
-            for p in profiles:
-                if p["id"] not in active_pids: continue
-                ensure_reset(p); s = access_state(p)
-                if not s["allowed"]: continue
-                p["usage"]["minutes_used_today"] += 1
-                lim = s.get("daily_limit_minutes")
-                if lim and p["usage"]["minutes_used_today"] >= lim: p["killed"] = True
+
+            for profile in profiles:
+                old_date = (profile.get("usage") or {}).get("usage_date")
+                ensure_reset(profile)
+                if profile["usage"].get("usage_date") != old_date:
+                    changed = True
+
+                if profile["id"] not in active_pids:
+                    continue
+                state = access_state(profile)
+                if not state["allowed"]:
+                    continue
+                profile["usage"]["minutes_used_today"] += tick_minutes
                 changed = True
-            if changed: wj(PROFILES_FILE, profiles)
-        except Exception:
-            pass
+
+            if changed:
+                wj(PROFILES_FILE, profiles)
+
+            if PIHOLE_ENABLED:
+                result = reconcile_pihole_enforcement(profiles)
+                if not result.get("ok"):
+                    print(
+                        "  Enforcement error:",
+                        result.get("error", "unknown Pi-hole error"),
+                        flush=True,
+                    )
+        except Exception as exc:
+            print(f"  Usage/enforcement loop error: {exc}", flush=True)
 
 # ══════════════════════════════════════════════════════
 #  RUNTIME INITIALIZATION
@@ -1897,6 +2050,19 @@ def initialize_runtime():
                         synced += 1
                 if synced:
                     print(f"  Blocklist sync   : {synced} profile(s) synced to Pi-hole")
+
+                enforcement = reconcile_pihole_enforcement(profiles)
+                if enforcement.get("ok"):
+                    blocked = enforcement.get("blocked_groups", [])
+                    print(
+                        "  Access control   : "
+                        + (", ".join(blocked) + " blocked" if blocked else "ready; no profiles blocked")
+                    )
+                else:
+                    print(
+                        "  Access control   : ERROR - "
+                        + enforcement.get("error", "unknown Pi-hole error")
+                    )
 
         threading.Thread(target=_scan_loop, daemon=True, name="scan").start()
         threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
