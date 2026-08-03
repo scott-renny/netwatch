@@ -99,6 +99,7 @@ PIHOLE_ENABLED  = os.environ.get("PIHOLE_ENABLED", "false").lower() == "true"
 PIHOLE_CONTROL_GROUP = os.environ.get("PIHOLE_CONTROL_GROUP", "NETWATCH-Control")
 PIHOLE_ACCESS_RULE = os.environ.get("PIHOLE_ACCESS_RULE", "^.+$")
 PIHOLE_ACCESS_COMMENT = "NET-WATCH managed access control - do not edit"
+PIHOLE_CONTROL_COMMENT = "NET-WATCH safety group; do not assign clients"
 
 class PiholeClient:
     def __init__(self):
@@ -245,6 +246,10 @@ class PiholeClient:
                 raise RuntimeError("The Pi-hole Default group cannot be used for NET-WATCH enforcement")
             if not group.get("enabled", True):
                 raise RuntimeError(f'Pi-hole group "{group_name}" is disabled')
+            if group_name == PIHOLE_CONTROL_GROUP and group.get("comment") != comment:
+                raise RuntimeError(
+                    f'Pi-hole group "{group_name}" already exists and is not owned by NET-WATCH'
+                )
             return group
 
         r = self._v6_request(
@@ -318,8 +323,24 @@ class PiholeClient:
             self._require_v6()
             control = self.ensure_group(
                 PIHOLE_CONTROL_GROUP,
-                "NET-WATCH safety group; do not assign clients",
+                PIHOLE_CONTROL_COMMENT,
             )
+            control_id = int(control["id"])
+            clients = self._v6_get("/api/clients").get("clients", [])
+            control_clients = [
+                client.get("client", client.get("name", "unknown"))
+                for client in clients
+                if control_id in [int(g) for g in client.get("groups", [])]
+            ]
+            if control_clients:
+                return {
+                    "ok": False,
+                    "error": (
+                        f'Control group "{PIHOLE_CONTROL_GROUP}" must have no clients; '
+                        + "remove: " + ", ".join(control_clients)
+                    ),
+                }
+
             all_groups = {g.get("name"): g for g in self._groups()}
             requested = sorted(set(name for name in group_names if name))
             target_ids = [int(control["id"])]
@@ -1654,6 +1675,21 @@ def scan_network():
 def probe_pihole():
     v = pihole.detect_version()
     return jsonify({"reachable":v is not None,"version":v,"base_url":pihole.base})
+
+@app.route("/api/pihole/enforcement", methods=["GET"])
+def pihole_enforcement_status():
+    return jsonify({
+        "enabled": PIHOLE_ENABLED,
+        "control_group": PIHOLE_CONTROL_GROUP,
+        "managed_regex": PIHOLE_ACCESS_RULE,
+        "desired": enforcement_plan(rj(PROFILES_FILE)),
+        "last_result": _enforcement_last,
+    })
+
+@app.route("/api/pihole/enforcement/reconcile", methods=["POST"])
+def pihole_enforcement_reconcile():
+    result = reconcile_pihole_enforcement()
+    return jsonify(result), (200 if result.get("ok") else 502)
 
 
 @app.route("/api/devices/auto-rename", methods=["POST"])
