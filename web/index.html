@@ -565,7 +565,22 @@ canvas{display:block}
     <div class="stat-card"><div class="stat-icon" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2)">🆕</div><div class="stat-body"><div class="stat-label">New (24h)</div><div class="stat-value" style="color:var(--cyan)">1</div></div></div>
   </div>
   <div class="panel">
-    <div class="panel-header"><span class="panel-title">All Devices</span><span class="panel-meta">Last scan: 2 min ago</span></div>
+    <div class="panel-header" style="gap:12px;flex-wrap:wrap">
+      <span class="panel-title">Devices</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap">
+        <label style="font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase" for="device-assignment-filter">Assignment</label>
+        <select class="field-select" id="device-assignment-filter" onchange="renderDevicesTable()" style="font-size:10px;padding:5px 8px;width:auto">
+          <option value="all">All devices</option>
+          <option value="assigned">Assigned</option>
+          <option value="unassigned">Unassigned</option>
+        </select>
+        <label style="font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase" for="device-type-filter">Type</label>
+        <select class="field-select" id="device-type-filter" onchange="renderDevicesTable()" style="font-size:10px;padding:5px 8px;width:auto">
+          <option value="all">All types</option>
+        </select>
+        <span class="panel-meta" id="device-filter-count">0 shown</span>
+      </div>
+    </div>
     <table class="data-table" id="devices-table">
       <thead><tr><th>Device</th><th>IP Address</th><th>MAC Address</th><th>Type</th><th>Profile</th><th>Last Seen</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="devices-tbody"></tbody>
@@ -858,7 +873,7 @@ canvas{display:block}
     <div class="modal-title">Add Device <span class="modal-close" onclick="closeModal('add-device-modal')">✕</span></div>
     <div class="field-row"><div class="field-label">Device Name</div><input class="field-input" id="new-device-name" placeholder="e.g. Raspberry Pi" style="width:100%"></div>
     <div class="field-row"><div class="field-label">IP Address</div><input class="field-input" id="new-device-ip" placeholder="192.168.1.x" style="width:100%"></div>
-    <div class="field-row"><div class="field-label">Type</div><select class="field-select" id="new-device-type"><option>Desktop</option><option>Server</option><option>Mobile</option><option>IoT</option><option>Game Console</option><option>TV</option></select></div>
+    <div class="field-row"><div class="field-label">Type</div><select class="field-select" id="new-device-type"><option>Desktop</option><option>Laptop</option><option>Tablet</option><option>Mobile</option><option>Server</option><option>Router</option><option>Network</option><option>Printer</option><option>Camera</option><option>Smart Speaker</option><option>Wearable</option><option>Appliance</option><option>IoT</option><option>Game Console</option><option>TV</option><option>Unknown</option></select></div>
     <div class="field-row"><div class="field-label">Assign to Profile (optional)</div><select class="field-select" id="new-device-profile"></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn" onclick="closeModal('add-device-modal')">Cancel</button>
@@ -919,12 +934,20 @@ canvas{display:block}
     <div class="field-row"><div class="field-label">IP Address</div><input class="field-input" id="edit-device-ip" style="width:100%"></div>
     <div class="field-row"><div class="field-label">Type</div>
       <select class="field-select" id="edit-device-type">
-        <option>Desktop</option><option>Server</option><option>Mobile</option>
-        <option>IoT</option><option>Game Console</option><option>TV</option>
-        <option>Laptop</option><option>Tablet</option><option>Unknown</option>
+        <option>Desktop</option><option>Laptop</option><option>Tablet</option><option>Mobile</option>
+        <option>Server</option><option>Router</option><option>Network</option><option>Printer</option>
+        <option>Camera</option><option>Smart Speaker</option><option>Wearable</option><option>Appliance</option>
+        <option>IoT</option><option>Game Console</option><option>TV</option><option>Unknown</option>
       </select>
     </div>
-    <div class="field-row"><div class="field-label">Icon (any emoji)</div><input class="field-input" id="edit-device-icon" style="width:100%" placeholder="💻"></div>
+    <div class="field-row">
+      <div class="field-label">Device Icon</div>
+      <input class="field-input" id="edit-device-icon" style="width:100%" placeholder="💻" maxlength="8">
+      <div style="font-size:10px;color:var(--muted);margin:6px 0">Choose one or enter any emoji:</div>
+      <div id="device-emoji-picker" style="display:grid;grid-template-columns:repeat(10,1fr);gap:5px">
+        <button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🖥️')" title="Use 🖥️">🖥️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('💻')" title="Use 💻">💻</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('⌨️')" title="Use ⌨️">⌨️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🖨️')" title="Use 🖨️">🖨️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🗄️')" title="Use 🗄️">🗄️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🌐')" title="Use 🌐">🌐</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📡')" title="Use 📡">📡</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🛜')" title="Use 🛜">🛜</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📱')" title="Use 📱">📱</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('☎️')" title="Use ☎️">☎️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('⌚')" title="Use ⌚">⌚</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📟')" title="Use 📟">📟</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📺')" title="Use 📺">📺</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🎮')" title="Use 🎮">🎮</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🕹️')" title="Use 🕹️">🕹️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📷')" title="Use 📷">📷</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🎥')" title="Use 🎥">🎥</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🔔')" title="Use 🔔">🔔</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🔊')" title="Use 🔊">🔊</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🎧')" title="Use 🎧">🎧</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('💡')" title="Use 💡">💡</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🔌')" title="Use 🔌">🔌</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🌡️')" title="Use 🌡️">🌡️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🧹')" title="Use 🧹">🧹</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🧺')" title="Use 🧺">🧺</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🍳')" title="Use 🍳">🍳</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🚪')" title="Use 🚪">🚪</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🔒')" title="Use 🔒">🔒</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🚗')" title="Use 🚗">🚗</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🚲')" title="Use 🚲">🚲</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🤖')" title="Use 🤖">🤖</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🏠')" title="Use 🏠">🏠</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🛡️')" title="Use 🛡️">🛡️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('❓')" title="Use ❓">❓</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📦')" title="Use 📦">📦</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🛰️')" title="Use 🛰️">🛰️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('📻')" title="Use 📻">📻</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('🖱️')" title="Use 🖱️">🖱️</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('💾')" title="Use 💾">💾</button><button type="button" class="btn" style="padding:5px;font-size:16px;min-width:0" onclick="selectDeviceEmoji('⚙️')" title="Use ⚙️">⚙️</button>
+      </div>
+    </div>
     <div class="field-row"><div class="field-label">Assign to Profile</div><select class="field-select" id="edit-device-profile"></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn danger" onclick="deleteDeviceConfirm()">🗑 Delete</button>
@@ -1564,8 +1587,42 @@ function renderAlerts() {
   }
 }
 
+function populateDeviceTypeFilter() {
+  const select = document.getElementById('device-type-filter');
+  if (!select) return;
+  const current = select.value || 'all';
+  const types = [...new Set(DEVICES_ALL.map(d => d.type || 'Unknown'))]
+    .sort((a, b) => a.localeCompare(b));
+  select.innerHTML = '<option value="all">All types</option>' +
+    types.map(type => `<option value="${type}">${type}</option>`).join('');
+  select.value = types.includes(current) ? current : 'all';
+}
+
 function renderDevicesTable() {
-  document.getElementById('devices-tbody').innerHTML = DEVICES_ALL.map(d => {
+  populateDeviceTypeFilter();
+  const assignment = document.getElementById('device-assignment-filter')?.value || 'all';
+  const type = document.getElementById('device-type-filter')?.value || 'all';
+  const visibleDevices = DEVICES_ALL
+    .filter(d => assignment === 'all' ||
+      (assignment === 'assigned' ? Boolean(d.profile_id) : !d.profile_id))
+    .filter(d => type === 'all' || (d.type || 'Unknown') === type)
+    .sort((a, b) => {
+      const assignmentOrder = Number(Boolean(b.profile_id)) - Number(Boolean(a.profile_id));
+      if (assignmentOrder) return assignmentOrder;
+      const typeOrder = (a.type || 'Unknown').localeCompare(b.type || 'Unknown');
+      return typeOrder || a.name.localeCompare(b.name);
+    });
+
+  const count = document.getElementById('device-filter-count');
+  if (count) count.textContent = `${visibleDevices.length} of ${DEVICES_ALL.length} shown`;
+
+  const tbody = document.getElementById('devices-tbody');
+  if (!visibleDevices.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:28px;text-align:center;color:var(--muted)">No devices match these filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = visibleDevices.map(d => {
     const owner = PROFILES_ALL.find(p => p.name === d.profile);
     const ownerColor = owner ? owner.color : null;
 
@@ -1720,7 +1777,12 @@ async function submitNewDevice() {
     return;
   }
 
-  const iconMap = { Desktop:'🖥️', Server:'🗄️', Mobile:'📱', IoT:'🔔', 'Game Console':'🎮', TV:'📺' };
+  const iconMap = {
+    Desktop:'🖥️', Laptop:'💻', Tablet:'📱', Mobile:'📱', Server:'🗄️',
+    Router:'🛜', Network:'🌐', Printer:'🖨️', Camera:'📷',
+    'Smart Speaker':'🔊', Wearable:'⌚', Appliance:'🔌', IoT:'🔔',
+    'Game Console':'🎮', TV:'📺', Unknown:'❓'
+  };
 
   try {
     await apiPost('/api/devices', {
@@ -1872,6 +1934,13 @@ async function reassignDevice(deviceId, newProfileId) {
 }
 
 // ═══════════════════ DEVICE EDIT MODAL ═══════════════════
+
+function selectDeviceEmoji(emoji) {
+  const input = document.getElementById('edit-device-icon');
+  if (!input) return;
+  input.value = emoji;
+  input.focus();
+}
 
 async function openDeviceEdit(deviceId) {
   // Fetch the latest data for this specific device from the backend
