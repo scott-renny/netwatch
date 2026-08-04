@@ -4,13 +4,13 @@
 #
 # What this script does, in plain English:
 #   1. Checks everything you need before changing anything
-#   2. Installs system packages (nmap, arp-scan, nginx, python3-pip)
-#   3. Installs Python libraries (Flask, flask-cors, requests)
+#   2. Installs missing scanning, bandwidth, web, and Python prerequisites
+#   3. Creates an isolated Python environment and installs application libraries
 #   4. Copies your netwatch project files to /opt/netwatch
 #   5. Installs the systemd service (auto-start on boot)
-#   6. Installs and enables the Nginx site config
-#   7. Opens the firewall port for HTTP (port 80)
-#   8. Tells you your server's IP so you can open the dashboard
+#   6. Preserves active Caddy or configures Nginx as the web frontend
+#   7. Opens the required private web ports
+#   8. Reports the dashboard address and next validation steps
 #
 # How to run it (from the folder containing this file):
 #   chmod +x setup.sh
