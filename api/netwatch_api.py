@@ -32,8 +32,11 @@ if CORS_ORIGIN:
 
 BASE_DIR      = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR    = os.path.join(BASE_DIR, "..", "config")
-DEVICES_FILE  = os.path.join(CONFIG_DIR, "devices.json")
-PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
+DEVICES_FILE    = os.path.join(CONFIG_DIR, "devices.json")
+PROFILES_FILE   = os.path.join(CONFIG_DIR, "profiles.json")
+ACCESS_LOG_FILE = os.path.join(CONFIG_DIR, "access_log.json")
+ACCESS_LOG_MAX_RECORDS = int(os.environ.get("ACCESS_LOG_MAX_RECORDS", "5000"))
+ACCESS_LOG_RETENTION_DAYS = int(os.environ.get("ACCESS_LOG_RETENTION_DAYS", "90"))
 
 # ══════════════════════════════════════════════════════
 #  AUTH
@@ -169,7 +172,7 @@ class PiholeClient:
             r = self._req(method, path, headers=headers, **kwargs)
         return r
 
-    def top_clients(self):
+    def top_clients(self, limit=6):
         """Per-client DNS query counts — used for bandwidth chart."""
         try:
             if self.ver == 6:
@@ -180,7 +183,7 @@ class PiholeClient:
                          "ip":  c.get("ip", ""),
                          "count": c.get("count", 0),
                          "pct": round(c.get("count", 0) / total * 100, 1)}
-                        for c in clients[:6]]
+                        for c in (clients[:limit] if limit is not None else clients)]
             else:
                 import requests as req
                 r = self._req("get", "/admin/api.php",
@@ -191,7 +194,7 @@ class PiholeClient:
                 return [{"name": k.split("|")[1] if "|" in k else k,
                          "ip":  k.split("|")[0] if "|" in k else k,
                          "count": v, "pct": round(v / total * 100, 1)}
-                        for k, v in list(src.items())[:6]]
+                        for k, v in (list(src.items())[:limit] if limit is not None else list(src.items()))]
         except Exception:
             return []
 
@@ -1260,6 +1263,55 @@ def wj(path, data):
 def new_id(prefix):
     return f"{prefix}-{uuid.uuid4().hex[:6]}"
 
+_access_log_lock = threading.Lock()
+
+def _write_json_atomic(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temp_path = f"{path}.tmp"
+    with open(temp_path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_path, path)
+
+def get_access_events(limit=20, profile_id=None):
+    with _access_log_lock:
+        events = rj(ACCESS_LOG_FILE)
+    if profile_id:
+        events = [event for event in events if event.get("profile_id") == profile_id]
+    return list(reversed(events[-max(1, min(int(limit), 500)):]))
+
+def append_access_event(event_type, profile, reason, title, color="#5a6580", metadata=None):
+    now = datetime.datetime.now().astimezone()
+    cutoff = now - datetime.timedelta(days=max(1, ACCESS_LOG_RETENTION_DAYS))
+    event = {
+        "id": new_id("evt"),
+        "timestamp": now.isoformat(),
+        "event_type": event_type,
+        "profile_id": profile.get("id"),
+        "profile_name": profile.get("name"),
+        "reason": reason,
+        "title": title,
+        "color": color,
+        "metadata": metadata or {},
+    }
+    with _access_log_lock:
+        events = rj(ACCESS_LOG_FILE)
+        retained = []
+        for existing in events:
+            try:
+                occurred = datetime.datetime.fromisoformat(existing.get("timestamp", ""))
+                if occurred.tzinfo is None:
+                    occurred = occurred.replace(tzinfo=now.tzinfo)
+                if occurred >= cutoff:
+                    retained.append(existing)
+            except (TypeError, ValueError):
+                continue
+        retained.append(event)
+        retained = retained[-max(1, ACCESS_LOG_MAX_RECORDS):]
+        _write_json_atomic(ACCESS_LOG_FILE, retained)
+    return event
+
 # ══════════════════════════════════════════════════════
 #  SCHEDULE / BUDGET
 # ══════════════════════════════════════════════════════
@@ -1301,6 +1353,38 @@ def access_state(p):
             "daily_limit_minutes":limit,"minutes_used_today":used,
             "minutes_remaining_budget":budget,
             "minutes_remaining_window":win_left,"minutes_remaining":rem}
+
+_last_access_states = {}
+
+def record_access_state_transitions(profiles, source="system", metadata_by_profile=None):
+    metadata_by_profile = metadata_by_profile or {}
+    for profile in profiles:
+        state = access_state(profile)
+        previous = _last_access_states.get(profile["id"])
+        current = (state["allowed"], state["reason"])
+        _last_access_states[profile["id"]] = current
+        if previous is None or previous == current:
+            continue
+        if state["allowed"]:
+            append_access_event(
+                "access_restored", profile, state["reason"],
+                f'Access restored for {profile["name"]}', "#00e87a",
+                {"source": source, **metadata_by_profile.get(profile["id"], {})},
+            )
+        else:
+            labels = {
+                "budget_exhausted": "daily active-use limit reached",
+                "after_window": "schedule window ended",
+                "before_window": "before schedule window",
+                "no_access_today": "no access scheduled",
+                "killed": "manual kill switch",
+            }
+            append_access_event(
+                "access_blocked", profile, state["reason"],
+                f'{profile["name"]} blocked — {labels.get(state["reason"], state["reason"])}',
+                "#ff4557",
+                {"source": source, **metadata_by_profile.get(profile["id"], {})},
+            )
 
 def norm_sched(raw):
     if not raw: return dict(DEFAULT_SCHED)
@@ -1516,6 +1600,21 @@ def toggle_kill(pid):
 
     devices = rj(DEVICES_FILE)
     affected = [d for d in devices if d.get("profile_id") == pid]
+    append_access_event(
+        "manual_block" if profile["killed"] else "manual_restore",
+        profile,
+        "killed" if profile["killed"] else "allowed",
+        (
+            f'Kill switch activated for {profile["name"]}'
+            if profile["killed"]
+            else f'Kill switch cleared for {profile["name"]}'
+        ),
+        "#ff4557" if profile["killed"] else "#00e87a",
+        {"devices_affected": len(affected)},
+    )
+    _last_access_states[profile["id"]] = (
+        access_state(profile)["allowed"], access_state(profile)["reason"]
+    )
     return jsonify({
         "profile_id": pid,
         "profile_name": profile["name"],
@@ -1571,6 +1670,11 @@ def reset_usage(pid):
     if clear_manual_kill:
         profile["killed"] = False
     wj(PROFILES_FILE, profiles)
+    append_access_event(
+        "usage_reset", profile, "usage_reset",
+        f'Active-use counter reset for {profile["name"]}', "#00d4ff",
+        {"clear_manual_kill": bool(clear_manual_kill)},
+    )
     enforcement = (
         reconcile_pihole_enforcement(profiles) if PIHOLE_ENABLED else None
     )
@@ -1586,6 +1690,18 @@ def get_access(pid):
     for p in rj(PROFILES_FILE):
         if p["id"]==pid: return jsonify(access_state(p))
     return jsonify({"error":"not found"}), 404
+
+@app.route("/api/access-log", methods=["GET"])
+def access_log():
+    try:
+        limit = int(request.args.get("limit", 20))
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit must be an integer"}), 400
+    return jsonify({
+        "events": get_access_events(limit, request.args.get("profile_id")),
+        "retention_days": ACCESS_LOG_RETENTION_DAYS,
+        "max_records": ACCESS_LOG_MAX_RECORDS,
+    })
 
 # ══════════════════════════════════════════════════════
 #  REAL-TIME DATA ENDPOINTS
@@ -2006,18 +2122,50 @@ def _scan_loop():
         except Exception:
             pass
 
+USAGE_MIN_DNS_QUERIES = int(os.environ.get("USAGE_MIN_DNS_QUERIES_PER_TICK", "3"))
+_usage_query_counts = {}
+
+def active_profiles_from_query_deltas(devices, current_counts, previous_counts, minimum_delta=None):
+    minimum_delta = USAGE_MIN_DNS_QUERIES if minimum_delta is None else minimum_delta
+    profile_deltas = {}
+    for device in devices:
+        profile_id = device.get("profile_id")
+        ip = device.get("ip")
+        if not profile_id or not ip or ip not in current_counts:
+            continue
+        current = int(current_counts.get(ip, 0))
+        previous = int(previous_counts.get(ip, current))
+        delta = max(0, current - previous)
+        profile_deltas[profile_id] = profile_deltas.get(profile_id, 0) + delta
+    active = {
+        profile_id for profile_id, delta in profile_deltas.items()
+        if delta >= max(1, int(minimum_delta))
+    }
+    return active, profile_deltas
+
 def _usage_loop():
     import time
+    global _usage_query_counts
     tick_minutes = USAGE_TICK_INTERVAL / 60.0
     while True:
         time.sleep(USAGE_TICK_INTERVAL)
         try:
             devices = rj(DEVICES_FILE)
             profiles = rj(PROFILES_FILE)
-            active_pids = {
-                device["profile_id"] for device in devices
-                if device.get("status") == "online" and device.get("profile_id")
-            }
+
+            # Charge active-use minutes only when assigned devices create new
+            # Pi-hole DNS activity. Device presence/scan status alone is never
+            # counted. The first sample establishes a baseline without charging.
+            current_counts = {}
+            if PIHOLE_ENABLED:
+                for client in pihole.top_clients(limit=None):
+                    ip = client.get("ip")
+                    if ip:
+                        current_counts[ip] = int(client.get("count", 0))
+            active_pids, profile_deltas = active_profiles_from_query_deltas(
+                devices, current_counts, _usage_query_counts
+            )
+            _usage_query_counts = current_counts
             changed = False
 
             for profile in profiles:
@@ -2036,6 +2184,15 @@ def _usage_loop():
 
             if changed:
                 wj(PROFILES_FILE, profiles)
+
+            record_access_state_transitions(
+                profiles,
+                source="usage_loop",
+                metadata_by_profile={
+                    profile_id: {"dns_query_delta": delta}
+                    for profile_id, delta in profile_deltas.items()
+                },
+            )
 
             if PIHOLE_ENABLED:
                 result = reconcile_pihole_enforcement(profiles)
@@ -2106,7 +2263,8 @@ def initialize_runtime():
         print("  Dashboard URL    : https://netwatch.coc-srv-01.home.arpa")
         print("─────────────────────────────────────────────────────\n")
 
-initialize_runtime()
+if os.environ.get("NETWATCH_DISABLE_RUNTIME", "false").lower() != "true":
+    initialize_runtime()
 
 if __name__ == "__main__":
     app.run(host=os.environ.get("NETWATCH_BIND", "127.0.0.1"),

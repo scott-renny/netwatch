@@ -141,6 +141,14 @@ PIHOLE_V6_PASSWORD=SET_OUTSIDE_GIT
 
 WAZUH_ENABLED=true
 WAZUH_ALERTS_FILE=/var/ossec/logs/alerts/alerts.json
+
+# Active-use budgets count one minute only when assigned devices produce
+# this many new Pi-hole DNS queries during a usage tick.
+USAGE_MIN_DNS_QUERIES_PER_TICK=3
+
+# Persistent access-event retention.
+ACCESS_LOG_RETENTION_DAYS=90
+ACCESS_LOG_MAX_RECORDS=5000
 ```
 
 Use one occurrence of each setting. Do not place real passwords, tokens, addresses, device identifiers, or private certificate data in public documentation.
@@ -204,6 +212,14 @@ Configuration and profile data are preserved when the installer is rerun. Back t
 | D2 — Network Architecture | Segmentation readiness, DNS policy, profile groups, network discovery |
 | D3 — Implementation | Linux services, reverse proxy, firewall, systemd, Gunicorn |
 | D4 — Security Operations | Wazuh alerts, MITRE ATT&CK mapping, monitoring, access-control validation |
+
+## Usage accounting and access history
+
+Daily budgets are based on per-client Pi-hole DNS counter deltas, not device discovery status. A device merely appearing online does not consume time. The first sample after service startup establishes a baseline without charging a minute.
+
+DNS activity is an activity proxy rather than literal screen time. Tune `USAGE_MIN_DNS_QUERIES_PER_TICK` for the network: increase it to ignore more background chatter, or decrease it for light browsing workloads.
+
+Access transitions, manual kill-switch changes, counter resets, and budget exhaustion are persisted in `config/access_log.json`. The dashboard reads the latest events from `GET /api/access-log`; retention is controlled by `ACCESS_LOG_RETENTION_DAYS` and `ACCESS_LOG_MAX_RECORDS`.
 
 ## Known limitations and next improvements
 

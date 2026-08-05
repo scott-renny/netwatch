@@ -1016,6 +1016,7 @@ const DAY_LABELS = { mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday
 // the original mock data so none of the render functions had to change.
 let DEVICES_ALL = [];
 let PROFILES_ALL = [];
+let ACCESS_LOG = [];
 let killStates = [];
 let apiOffline = false;
 
@@ -1171,7 +1172,11 @@ async function apiDelete(path) {
 // ── Pull everything from /api/status in one call, update live globals ──
 async function loadDataFromServer() {
   try {
-    const s = await apiGet('/api/status');
+    const [s, accessLogData] = await Promise.all([
+      apiGet('/api/status'),
+      apiGet('/api/access-log?limit=20'),
+    ]);
+    ACCESS_LOG = accessLogData.events || [];
 
     // Profiles + devices
     PROFILES_ALL = s.profiles.map(mapServerProfile);
@@ -1367,10 +1372,6 @@ const PROTO_DATA = [];
 // Alert history — populated from Wazuh when WAZUH_ENABLED=true
 // Until then showing empty — no fake alerts.
 const ALERT_HISTORY = [];
-
-// Access log — will populate from real profile kill switch events
-// Empty until profiles are set up and events occur.
-const ACCESS_LOG = [];
 
 const INTEGRATIONS_DATA = [
   {name:'Pi-hole',        desc:'DNS sinkhole & ad blocking',  url:'', on:false},
@@ -2190,12 +2191,33 @@ async function triggerAutoRename() {
   }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+  })[char]);
+}
+
 function renderAccessLog() {
-  document.getElementById('access-log').innerHTML = ACCESS_LOG.map(e => `
-    <div class="tl-item">
-      <div class="tl-dot" style="background:${e.color};box-shadow:0 0 4px ${e.color}"></div>
-      <div class="tl-body"><div class="tl-title">${e.title}</div><div class="tl-meta"><span>${e.time}</span></div></div>
-    </div>`).join('');
+  const target = document.getElementById('access-log');
+  if (!ACCESS_LOG.length) {
+    target.innerHTML = '<div style="padding:18px;color:var(--muted);font-size:11px">No access events recorded yet.</div>';
+    return;
+  }
+  target.innerHTML = ACCESS_LOG.map(e => {
+    const occurred = e.timestamp ? new Date(e.timestamp).toLocaleString() : 'Unknown time';
+    const detail = e.metadata?.dns_query_delta != null
+      ? ` · ${e.metadata.dns_query_delta} new DNS queries`
+      : '';
+    const color = /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#5a6580';
+    return `
+      <div class="tl-item">
+        <div class="tl-dot" style="background:${color};box-shadow:0 0 4px ${color}"></div>
+        <div class="tl-body">
+          <div class="tl-title">${escapeHtml(e.title)}</div>
+          <div class="tl-meta"><span>${escapeHtml(occurred + detail)}</span></div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function renderFWRules() {
@@ -2749,6 +2771,7 @@ setInterval(async () => {
     renderAlerts();
     renderNetStatus();
     renderNetworkMap(); // update topology with latest device list
+    renderAccessLog();
   }
 }, 10000);
 
