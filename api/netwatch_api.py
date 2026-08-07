@@ -176,14 +176,24 @@ class PiholeClient:
         """Per-client DNS query counts — used for bandwidth chart."""
         try:
             if self.ver == 6:
-                data = self._v6_get("/api/stats/top_clients")
-                clients = data.get("top_sources", [])
-                total   = sum(c.get("count", 0) for c in clients) or 1
-                return [{"name": c.get("name", c.get("ip", "?")),
-                         "ip":  c.get("ip", ""),
-                         "count": c.get("count", 0),
-                         "pct": round(c.get("count", 0) / total * 100, 1)}
-                        for c in (clients[:limit] if limit is not None else clients)]
+                # Pi-hole v6 returns {"clients": [...], "total_queries": N}.
+                # Request a broad list for usage accounting; without count= the
+                # endpoint only returns its default top-client subset.
+                requested_count = max(1, int(limit)) if limit is not None else 1000
+                data = self._v6_get(
+                    "/api/stats/top_clients",
+                    params={"count": requested_count},
+                )
+                clients = data.get("clients", data.get("top_sources", []))
+                total = int(data.get("total_queries", 0))
+                if total <= 0:
+                    total = sum(int(c.get("count", 0)) for c in clients) or 1
+                selected = clients[:limit] if limit is not None else clients
+                return [{"name": c.get("name") or c.get("ip", "?"),
+                         "ip": c.get("ip", ""),
+                         "count": int(c.get("count", 0)),
+                         "pct": round(int(c.get("count", 0)) / total * 100, 1)}
+                        for c in selected]
             else:
                 import requests as req
                 r = self._req("get", "/admin/api.php",
