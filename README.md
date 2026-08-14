@@ -12,7 +12,7 @@ NET-WATCH began as a family screen-time project and evolved into an integrated n
 
 ## Project status
 
-**Phase 6 is complete.** The production deployment has been validated with real devices and the Matthew and Sophia profiles. The platform is stable and will remain in service until its next planned version update.
+**Phase 6 is complete and NET-WATCH is feature-complete, operational, and maintained.** The production deployment has been validated with real devices and the Matthew and Sophia profiles. The platform is stable and will remain in service until its next planned version update.
 
 NET-WATCH is also documented as [Phase 6 of the Cyber Operations Center Engineering Program](https://github.com/scott-renny/cyber-operations-center-engineering-program/tree/main/phases/phase-06-netwatch).
 
