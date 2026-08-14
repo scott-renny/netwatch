@@ -83,17 +83,17 @@ The dashboard URL changed from `http://SERVER_IP` to `http://SERVER_IP:8082`. Th
 **Severity:** Low — dashboard showed "Backend Offline" after every file update
 
 ### What Happened
-Every time `index.html` was copied from the development machine to the server, the `API_BASE` constant reverted from `http://192.168.1.103:8082` back to the placeholder `http://127.0.0.1:5000`, causing the dashboard to show "Backend Offline" immediately after update.
+Every time `index.html` was copied from the development machine to the server, the `API_BASE` constant reverted from `http://192.0.2.103:8082` back to the placeholder `http://127.0.0.1:5000`, causing the dashboard to show "Backend Offline" immediately after update.
 
 ### Root Cause
 The source file on the development machine retained the placeholder value. Each file copy overwrote the server's edited version. There was no persistent mechanism to inject the server-specific IP into the file.
 
 ### Resolution
 Two-part fix:
-1. Updated the source file's `API_BASE` to `http://192.168.1.103:8082` permanently — it is now baked in
+1. Updated the source file's `API_BASE` to `http://192.0.2.103:8082` permanently — it is now baked in
 2. Added a post-copy `sed` command as standard procedure after every file update:
 ```bash
-sudo sed -i 's|const API_BASE = "http://127.0.0.1:5000";|const API_BASE = "http://192.168.1.103:8082";|' /opt/netwatch/web/index.html
+sudo sed -i 's|const API_BASE = "http://127.0.0.1:5000";|const API_BASE = "http://192.0.2.103:8082";|' /opt/netwatch/web/index.html
 ```
 
 ### Lessons Learned
