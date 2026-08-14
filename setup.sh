@@ -227,7 +227,7 @@ if [ "$CADDY_ACTIVE" = true ]; then
     fi
     if caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
         systemctl reload caddy
-        ok "Caddy reloaded with NET-WATCH at https://netwatch.coc-srv-01.home.arpa"
+        ok "Caddy reloaded with NET-WATCH at https://netwatch.coc-server.example.internal"
     else
         fail "Caddy validation failed; restore the timestamped Caddyfile backup"
     fi
@@ -273,7 +273,7 @@ echo -e "${GREEN}${BOLD}╚═════════════════�
 echo ""
 echo -e "  ${BOLD}Dashboard URL:${RESET}"
 if [ "$CADDY_ACTIVE" = true ]; then
-    echo -e "    ${CYAN}https://netwatch.coc-srv-01.home.arpa${RESET}"
+    echo -e "    ${CYAN}https://netwatch.coc-server.example.internal${RESET}"
 else
     for addr in $ADDRS; do
         echo -e "    ${CYAN}http://$addr${RESET}"
@@ -291,7 +291,7 @@ echo -e "    Update files : ${CYAN}sudo ./setup.sh${RESET}  (re-run anytime)"
 echo ""
 echo -e "  ${BOLD}Next steps:${RESET}"
 echo -e "  1. Verify: ${CYAN}curl http://localhost:8082/api/health${RESET}"
-echo -e "  2. Add local DNS: netwatch.coc-srv-01.home.arpa → $PRIMARY_IP"
+echo -e "  2. Add local DNS: netwatch.coc-server.example.internal → $PRIMARY_IP"
 echo -e "  3. Configure Pi-hole/Wazuh in ${CYAN}/etc/netwatch/netwatch.env${RESET}"
 echo -e "  4. Restart with ${CYAN}sudo systemctl restart netwatch${RESET}"
 echo ""
