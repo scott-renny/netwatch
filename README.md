@@ -33,6 +33,8 @@ NET-WATCH is also documented as [Phase 6 of the Cyber Operations Center Engineer
 
 ## Production architecture
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for components, the API surface and the access-control model.
+
 ```text
 LAN devices
      |
