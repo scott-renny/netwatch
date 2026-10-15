@@ -1,10 +1,18 @@
-# NET-WATCH
+<div align="center">
 
-![Status](https://img.shields.io/badge/status-Phase%206%20complete-success)
-![Version](https://img.shields.io/badge/version-3.1-blue)
-![Platform](https://img.shields.io/badge/platform-Ubuntu%20Server-orange)
-![DNS](https://img.shields.io/badge/Pi--hole-v6-red)
-![SIEM](https://img.shields.io/badge/SIEM-Wazuh-005571)
+# NET-WATCH
+### Network Visibility · DNS Policy · Security Telemetry
+
+![recorded version: 3.1](https://img.shields.io/badge/recorded%20version-3.1-2563eb?style=flat-square)
+![platform: Ubuntu Server](https://img.shields.io/badge/platform-Ubuntu%20Server-22d3ee?style=flat-square)
+
+[Architecture](ARCHITECTURE.md) · [License](LICENSE)
+
+</div>
+
+[Project status](#project-status) · [Capabilities](#capabilities) · [Production architecture](#production-architecture) · [Pi-hole safety model](#pi-hole-safety-model) · [Wazuh integration](#wazuh-integration) · [Repository structure](#repository-structure)
+
+---
 
 > **Operational network visibility and profile-based DNS access control for the Cyber Operations Center Engineering Program.**
 
